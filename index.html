@@ -4828,6 +4828,19 @@ function getCuratedPlans(){
     });
   }
 
+  // ── EIGENER PLAN ────────────────────────────────────
+  plans.push({
+    id:'ob_custom',
+    name:'Eigener Plan',
+    icon:'✏️',
+    desc:'Starte mit leeren Tagen und gestalte deinen Plan komplett selbst.',
+    science:'Für Fortgeschrittene die genau wissen was sie trainieren wollen.',
+    tag:'INDIVIDUELL',
+    schedule:null,
+    isCustom:true,
+    days:[]
+  });
+
   return plans;
 }
 
@@ -4855,7 +4868,7 @@ function buildObPlanList(){
   container.innerHTML='';
   _obPlans.forEach((plan,idx)=>{
     const isSelected=idx===_obSelPlanIdx;
-    const tagColors={'EMPFOHLEN':'#22c55e','ALTERNATIV':'#888','SPEZIALIST':'#d97706'};
+    const tagColors={'EMPFOHLEN':'#22c55e','ALTERNATIV':'#888','SPEZIALIST':'#d97706','INDIVIDUELL':'#a855f7'};
     const tc=tagColors[plan.tag]||'#888';
     // Use button for iOS compatibility
     const btn=document.createElement('button');
@@ -4882,9 +4895,9 @@ function buildObPlanList(){
       +'<div style="font-size:10px;color:#aaa;line-height:1.6">'+plan.schedule.weekly+'</div>'
       +'<div style="font-size:10px;color:#666;margin-top:3px">💤 '+plan.schedule.rest+'</div>'
       +'</div>':'')
-      +'<div style="display:flex;flex-wrap:wrap;gap:5px;pointer-events:none">'
-      +plan.days.map(d=>'<span style="background:#222;border-radius:6px;padding:3px 8px;font-size:10px;color:#888">'+d.icon+' '+d.name+'</span>').join('')
-      +'</div>';
+      +(plan.isCustom
+        ? '<div style="background:rgba(168,85,247,.08);border:1px dashed rgba(168,85,247,.3);border-radius:8px;padding:10px;text-align:center;pointer-events:none"><div style="font-size:11px;color:#a855f7">✏️ Du legst Tage &amp; Übungen selbst fest</div></div>'
+        : '<div style="display:flex;flex-wrap:wrap;gap:5px;pointer-events:none">'+plan.days.map(d=>'<span style="background:#222;border-radius:6px;padding:3px 8px;font-size:10px;color:#888">'+d.icon+' '+d.name+'</span>').join('')+'</div>');
     btn.addEventListener('click',function(){selectObPlan(parseInt(this.getAttribute('data-idx')));});
     btn.addEventListener('touchend',function(e){e.preventDefault();selectObPlan(parseInt(this.getAttribute('data-idx')));},{passive:false});
     container.appendChild(btn);
@@ -4913,7 +4926,15 @@ function obNext(step){
     if(!gewicht){alert('Bitte dein Gewicht eingeben');return;}
   }
   if(step===5)buildObPlanList();
-  if(step===6)buildObResults();
+  if(step===6){
+    const selPlan=_obPlans[_obSelPlanIdx];
+    if(selPlan&&selPlan.isCustom){
+      // Custom plan: launch app with empty days, user adds everything themselves
+      finishOnboarding(true);
+      return;
+    }
+    buildObResults();
+  }
   for(let i=0;i<=6;i++){const el=document.getElementById('ob-step-'+i);if(el)el.style.display=(i===step)?'block':'none';}
   const labels={0:'Sprache',1:'1/6',2:'2/6',3:'3/6',4:'4/6',5:'5/6',6:'✓'};
   const progW={0:'5%',1:'17%',2:'34%',3:'51%',4:'68%',5:'85%',6:'100%'};
@@ -5041,6 +5062,28 @@ document.querySelectorAll('.obg').forEach(g=>{
     g.style.border='1px solid #2563eb';g.style.background='rgba(37,99,235,.15)';g.querySelector('div:last-child').style.color='#3b82f6';
   });
 });
+function finishOnboarding(isCustom){
+  const name=document.getElementById('ob-name').value.trim();
+  const gewicht=parseFloat(document.getElementById('ob-gewicht').value)||0;
+  if(!name||!gewicht){alert('Bitte Name und Gewicht eingeben');return;}
+  USER.name=name.toUpperCase();
+  USER.alter=parseInt(document.getElementById('ob-alter').value)||30;
+  USER.groesse=parseInt(document.getElementById('ob-groesse').value)||175;
+  USER.gewicht=gewicht;USER.goal=_obGoal;USER.experience=_obExp;
+  USER.activityFactor=_obActivity;USER.setup=true;USER.theme='dark';
+  saveUser();
+  if(isCustom){
+    // Create one empty day so user can start adding exercises
+    const emptyDay={id:'d_custom_'+Date.now(),name:'TAG 1',icon:'💪',pauseAW:60,pauseWork:90,exercises:[]};
+    const emptyPlan={id:'p_custom_'+Date.now(),name:'Mein Plan',icon:'✏️',desc:'Eigener Plan',days:[emptyDay]};
+    const plans=getPlans();plans.push(emptyPlan);savePlans(plans);
+    setActivePlan(emptyPlan.id);
+    currentDayId=emptyDay.id;setCurrentDay(currentDayId);
+  }
+  document.getElementById('obov').classList.remove('on');updateDash();renderLog();
+  if(isCustom)toast('Willkommen, '+USER.name+'! Füge deine ersten Übungen hinzu 💪');
+}
+
 document.getElementById('ob-btn').addEventListener('click',()=>{
   const name=document.getElementById('ob-name').value.trim();
   const gewicht=parseFloat(document.getElementById('ob-gewicht').value)||0;
