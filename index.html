@@ -2768,17 +2768,27 @@ function buildWorkoutSummary(pid,did,week){
 
   let totalSets=0,totalVol=0,prCount=0,exercises=[];
 
-  // All exercises including added ones are now in day.exercises
-  const allExercises=day.exercises.map((ex,ei)=>({ex,ei}));
+  // Collect all exercises: plan exercises + any extras stored in localStorage
+  const planExercises=day.exercises.map((ex,ei)=>({ex,ei}));
+  // Also scan localStorage for extra exercises added beyond plan length
+  const extraExercises=[];
+  for(let ei=day.exercises.length;ei<day.exercises.length+20;ei++){
+    const hasData=[...Array(10)].some((_,si)=>parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0);
+    if(!hasData)break;
+    const nm=S.g(K.swap(pid,did,ei))||('Übung '+(ei+1));
+    extraExercises.push({ex:{name:nm,sets:3},ei});
+  }
+  const allExercises=[...planExercises,...extraExercises];
 
   allExercises.forEach(({ex,ei})=>{
     // Read up to 20 sets and collect only filled ones
     let exVol=0,exSets=0,best1RM=0;
     let setDetails=[];
-    for(let si=0;si<20;si++){
+    const exSetCount=getSetCount(pid,did,ei,ex.sets||3);
+    for(let si=0;si<Math.max(exSetCount+5,10);si++){
       const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
-      if(kg===0&&wdh===0&&si>=getSetCount(pid,did,ei,ex.sets||3))break; // stop when past expected sets and empty
+      if(kg===0&&wdh===0&&si>=exSetCount)break;
       if(kg>0&&wdh>0){
         const stype=S.g(KsetType(pid,did,ei,si))||'rir2';
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
@@ -2791,7 +2801,7 @@ function buildWorkoutSummary(pid,did,week){
     if(exSets>0){
       let isPR=false;
       for(let pw=1;pw<week;pw++){
-        for(let psi=0;psi<cnt;psi++){
+        for(let psi=0;psi<exSetCount+5;psi++){
           const pkg=parseFloat(S.g(K.set(pid,did,pw,ei,psi,'kg')))||0;
           const pwdh=parseInt(S.g(K.set(pid,did,pw,ei,psi,'wdh')))||0;
           if(pkg>0&&pwdh>0&&pkg*(1+pwdh/30)>=best1RM){isPR=false;break;}
