@@ -1759,9 +1759,14 @@ function getDefaultRRForDay(day){
 }
 
 function checkWdhInRange(wdhEl,pid,did,week,ei,si,day){
-  // Try custom range first, then day default
+  // Training Typ override: Power/Hyp/Pump ranges take priority
+  const _ttKey='tt_'+pid+'_'+did+'_w'+week;
+  const _tt=S.g(_ttKey)||'hyp';
+  const _ttRangeMap={power:{min:3,max:6},hyp:{min:6,max:12},pump:{min:12,max:20}};
+  const _ttRange=_ttRangeMap[_tt];
+  // Try custom range first, then training type, then day default
   const saved=S.gj(KrrEx(pid,did,ei));
-  const range=saved&&saved.min?saved:(day?getDefaultRRForDay(day):null);
+  const range=saved&&saved.min?saved:(_ttRange||( day?getDefaultRRForDay(day):null));
   wdhEl.style.borderColor='';wdhEl.style.background='';wdhEl.title='';
   if(!range||!range.min)return;
   const wdh=parseInt(wdhEl.value)||0;
@@ -3150,8 +3155,8 @@ function renderLog(){
   const _ttKey='tt_'+pid+'_'+did+'_w'+week;
   let _ttCurrent=S.g(_ttKey)||'hyp';
   const _ttRanges={
-    power:{label:'⚡ Power',color:'#f59e0b',reps:'1–5 Wdh',rest:'3–5 Min',note:'Schwer, explosiv, viel Pause'},
-    hyp:{label:'💪 Hypertrophie',color:'#2563eb',reps:'6–12 Wdh',rest:'60–90 Sek',note:'Moderates Gewicht, kontrolliert'},
+    power:{label:'⚡ Power',color:'#f59e0b',reps:'3–6 Wdh',rest:'3–5 Min',note:'Schwer, explosiv, viel Pause'},
+    hyp:{label:'💪 Hypertrophie',color:'#2563eb',reps:'6–12 Wdh',rest:'120–180 Sek',note:'Moderates Gewicht, kontrolliert'},
     pump:{label:'🔥 Pump',color:'#22c55e',reps:'12–20 Wdh',rest:'30–60 Sek',note:'Leicht, hohes Volumen, kurze Pause'}
   };
   const ttWrap=document.createElement('div');
