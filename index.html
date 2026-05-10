@@ -2807,7 +2807,10 @@ function buildWorkoutSummary(pid,did,week){
           if(pkg>0&&pwdh>0&&pkg*(1+pwdh/30)>=best1RM){isPR=false;break;}
         }
       }
-      exercises.push({name:nm,sets:exSets,vol:Math.round(exVol),oneRM:Math.round(best1RM),pr:isPR,setDetails});
+      // Get pause for this exercise (custom or day default)
+      const exPauseKey='epause_'+pid+'_'+did+'_'+ei;
+      const exPause=parseInt(S.g(exPauseKey))||day.pauseWork||180;
+      exercises.push({name:nm,sets:exSets,vol:Math.round(exVol),oneRM:Math.round(best1RM),pr:isPR,setDetails,pause:exPause});
     }
   });
 
@@ -2892,8 +2895,9 @@ function buildWorkoutSummary(pid,did,week){
       +'<div style="font-size:12px;font-weight:700;color:var(--text)">'+ex.name+'</div>'
       +(ex.pr?'<div style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:800;color:var(--gold)">🏆 PR</div>':'')
       +'</div>';
-    // Summary line
-    html+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+ex.sets+' Sätze · '+ex.vol+'kg Volumen'+(ex.oneRM>0?' · 1RM ~'+ex.oneRM+'kg':'')+'</div>';
+    // Summary line with pause
+    const pauseStr=ex.pause>=60?Math.round(ex.pause/60)+'min '+((ex.pause%60)>0?(ex.pause%60)+'s':''):ex.pause+'s';
+    html+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+ex.sets+' Sätze · '+ex.vol+'kg Volumen'+(ex.oneRM>0?' · 1RM ~'+ex.oneRM+'kg':'')+' · ⏱ '+pauseStr+' Pause</div>';
     // Set details with type + note
     if(ex.setDetails&&ex.setDetails.length){
       html+='<div style="display:flex;flex-direction:column;gap:3px">';
@@ -2915,7 +2919,12 @@ function buildWorkoutSummary(pid,did,week){
   // Kalorien Empfehlung
   const tdee=calcTDEE();
   if(tdee>0){
-    const tK=calcTrainKcal(Math.max(20,Math.round(dur/60)),.45);
+    // Calculate avg pause fraction from actual exercise pauses
+    const avgPause=exercises.length>0
+      ? exercises.reduce((s,e)=>s+(e.pause||180),0)/exercises.length
+      : 180;
+    const summaryPf=Math.min(0.7,avgPause/(avgPause+45)); // pause/(pause+~45s active)
+    const tK=calcTrainKcal(Math.max(20,Math.round(dur/60)),summaryPf);
     const recKcal=tdee+tK;
     const m=calcMakros(recKcal);
     const kcalLbl=lang==='es'?'Calorías recomendadas hoy':lang==='en'?'Recommended calories today':'Empfohlene Kalorien heute';
