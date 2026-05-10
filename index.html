@@ -3146,6 +3146,40 @@ function renderLog(){
   // Kcal widget
   c.appendChild(buildKcalWidget(plan,day,pf));
 
+  // Training Type Selector (Power / Hypertrophie / Pump)
+  const _ttKey='tt_'+pid+'_'+did+'_w'+week;
+  let _ttCurrent=S.g(_ttKey)||'hyp';
+  const _ttRanges={
+    power:{label:'⚡ Power',color:'#f59e0b',reps:'1–5 Wdh',rest:'3–5 Min',note:'Schwer, explosiv, viel Pause'},
+    hyp:{label:'💪 Hypertrophie',color:'#2563eb',reps:'6–12 Wdh',rest:'60–90 Sek',note:'Moderates Gewicht, kontrolliert'},
+    pump:{label:'🔥 Pump',color:'#22c55e',reps:'12–20 Wdh',rest:'30–60 Sek',note:'Leicht, hohes Volumen, kurze Pause'}
+  };
+  const ttWrap=document.createElement('div');
+  ttWrap.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:10px';
+  function renderTT(){
+    const cur=_ttRanges[_ttCurrent];
+    ttWrap.innerHTML='<div style="font-size:10px;color:#555;font-weight:700;letter-spacing:1px;margin-bottom:6px">TRAINING TYP</div>'
+      +'<div style="display:flex;gap:6px;margin-bottom:8px">'
+      +Object.entries(_ttRanges).map(([k,v])=>'<button data-tt="'+k+'" style="flex:1;padding:6px 4px;border-radius:8px;border:1px solid '+(k===_ttCurrent?v.color:'#222')+';background:'+(k===_ttCurrent?v.color+'22':'#1a1a1a')+';color:'+(k===_ttCurrent?v.color:'#555')+';font-size:10px;font-weight:700;cursor:pointer">'+v.label+'</button>').join('')
+      +'</div>'
+      +'<div style="display:flex;gap:8px">'
+      +'<div style="flex:1;background:#1a1a1a;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;margin-bottom:2px">REP RANGE</div><div style="font-size:13px;font-weight:700;color:'+cur.color+'">'+cur.reps+'</div></div>'
+      +'<div style="flex:1;background:#1a1a1a;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;margin-bottom:2px">PAUSE</div><div style="font-size:13px;font-weight:700;color:'+cur.color+'">'+cur.rest+'</div></div>'
+      +'<div style="flex:2;background:#1a1a1a;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;margin-bottom:2px">FOKUS</div><div style="font-size:11px;color:#888">'+cur.note+'</div></div>'
+      +'</div>';
+  }
+  renderTT();
+  ttWrap.addEventListener('click',function(e){
+    const btn=e.target.closest('[data-tt]');
+    if(!btn)return;
+    _ttCurrent=btn.getAttribute('data-tt');
+    S.s(_ttKey,_ttCurrent);
+    renderTT();
+    // Re-attach listener after re-render
+    ttWrap.addEventListener('click',arguments.callee,{once:true});
+  });
+  c.appendChild(ttWrap);
+
   // Legend
   const leg=document.createElement('div');leg.className='leg';
   leg.innerHTML='<div class="legi"><div class="legd ldaw"></div>AW</div><div class="legi"><div class="legd ldrir"></div>RIR</div><div class="legi"><div class="legd ldmv"></div>MV</div>';
@@ -3362,13 +3396,21 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
 
   const body=document.createElement('div');body.className='exbody';
 
-  // Vorwoche
-  const vwK=K.vw(pid,did,week,ei);const prevVw=week>1?S.g(K.vw(pid,did,week-1,ei)):null;
+  // Vorwoche – auto-calculated from real previous week sets
   const vwr=document.createElement('div');vwr.className='vwr';
   const vwl=document.createElement('span');vwl.className='vwl';vwl.textContent=t('vorwoche');
-  const vwi=document.createElement('input');vwi.className='vwi';vwi.placeholder=prevVw||'z.B. 70kg × 8';
-  vwi.value=S.g(vwK)||(prevVw||'');vwi.addEventListener('change',()=>S.s(vwK,vwi.value));
-  vwr.appendChild(vwl);vwr.appendChild(vwi);body.appendChild(vwr);
+  const vwv=document.createElement('span');vwv.className='vwi';vwv.style.cssText='background:transparent;border:none;color:var(--muted);font-size:12px;padding:0';
+  if(week>1){
+    const _cnt=getSetCount(pid,did,ei,ex.sets||3);
+    let _bKg=0,_bWdh=0;
+    for(let _si=0;_si<_cnt+5;_si++){
+      const _kg=parseFloat(S.g(K.set(pid,did,week-1,ei,_si,'kg')))||0;
+      const _wd=parseInt(S.g(K.set(pid,did,week-1,ei,_si,'wdh')))||0;
+      if(_kg>0&&_wd>0&&_kg>=_bKg){_bKg=_kg;_bWdh=_wd;}
+    }
+    vwv.textContent=_bKg>0?_bKg+'kg x '+_bWdh:'–';
+  } else { vwv.textContent='–'; }
+  vwr.appendChild(vwl);vwr.appendChild(vwv);body.appendChild(vwr);
 
   // 1RM display (Epley formula)
   const oneRMRow=document.createElement('div');
