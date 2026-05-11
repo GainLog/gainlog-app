@@ -2790,7 +2790,19 @@ function buildWorkoutSummary(pid,did,week){
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
       if(kg===0&&wdh===0&&si>=exSetCount)break;
       if(kg>0&&wdh>0){
-        const stype=S.g(KsetType(pid,did,ei,si))||'rir2';
+        // stype: custom override → plan default → rir2
+        const stypeCustom=S.g(KsetType(pid,did,ei,si));
+        let stype=stypeCustom;
+        if(!stype){
+          // Derive from plan exercise type
+          const exType=ex.type||'rir-mv';
+          const cnt2=getSetCount(pid,did,ei,ex.sets||3);
+          if(exType==='all-mv') stype='mv';
+          else if(exType==='all-rir') stype='rir2';
+          else{ // rir-mv: last set is mv, rest are rir
+            stype=si===cnt2-1?'mv':'rir2';
+          }
+        }
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
         exVol+=kg*wdh;exSets++;totalSets++;totalVol+=kg*wdh;
         const rm=kg*(1+wdh/30);if(rm>best1RM)best1RM=rm;
