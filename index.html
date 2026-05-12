@@ -2025,11 +2025,6 @@ function exportPlanAsText(plan){
   txt+='  '+plan.icon+' '+plan.name.toUpperCase()+NL;
   txt+=LINE+NL+NL;
 
-  const _dbg=plan.days.slice(0,1).map(d=>{
-    const _s0=S.g(K.csets(plan.id,d.id,0));
-    return 'planid:'+plan.id.slice(0,15)+'\ndayid:'+d.id.slice(0,15)+'\ncsets_ei0:'+_s0;
-  }).join('\n');
-  alert(_dbg);
   plan.days.forEach((day,di)=>{
     txt+=line2+NL;
     txt+=day.icon+' '+day.name.toUpperCase()+NL;
@@ -2038,7 +2033,21 @@ function exportPlanAsText(plan){
     day.exercises.forEach((ex,ei)=>{
       const swapName=S.g(K.swap(plan.id,day.id,ei));
       const name=swapName||ex.name;
-      const sets=getSetCount(plan.id,day.id,ei,ex.sets||3);
+      // Count actual sets from storage (any week)
+      let sets=ex.sets||3;
+      const _cstored=S.g(K.csets(plan.id,day.id,ei));
+      if(_cstored){sets=Math.max(1,parseInt(_cstored)||sets);}
+      else{
+        // Count filled sets across all weeks
+        let _maxSi=0;
+        for(let _w=1;_w<=20;_w++){
+          for(let _si=0;_si<20;_si++){
+            const _v=S.g(K.set(plan.id,day.id,_w,ei,_si,'kg'));
+            if(_v)_maxSi=Math.max(_maxSi,_si+1);
+          }
+        }
+        if(_maxSi>0)sets=_maxSi;
+      }
       const rrSaved=S.gj(KrrEx(plan.id,day.id,ei));
       let rrStr='';
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
