@@ -2025,6 +2025,7 @@ function exportPlanAsText(plan){
   txt+='  '+plan.icon+' '+plan.name.toUpperCase()+NL;
   txt+=LINE+NL+NL;
 
+  console.log('Export plan.id:', plan.id, 'days:', plan.days.map(d=>d.id));
   plan.days.forEach((day,di)=>{
     txt+=line2+NL;
     txt+=day.icon+' '+day.name.toUpperCase()+NL;
