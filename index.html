@@ -2550,7 +2550,7 @@ function obLoadBackup(){
         document.getElementById('obov').classList.remove('on');
         applyLang(USER.lang||'de');
         updateDash();renderLog();
-        toast('✅ Backup geladen – willkommen zurück, '+USER.name+'! 💪');
+        // toast removed – too annoying on every save/sync
       }catch(err){
         toast('❌ Fehler beim Laden: '+err.message);
       }
@@ -3587,8 +3587,54 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
     if(!pl)return;
     const dy=pl.days.find(d=>d.id===_rmDid);
     if(!dy)return;
+    // Re-index storage keys after deletion to prevent data shifting
+    function reindexAfterDelete(pid,did,delEi,totalEx){
+      // Shift all storage keys from delEi+1 onwards down by 1
+      for(let ei=delEi;ei<totalEx-1;ei++){
+        // Move ei+1 → ei for all weeks and sets
+        for(let w=1;w<=20;w++){
+          for(let si=0;si<20;si++){
+            ['kg','wdh','notiz'].forEach(f=>{
+              const fromKey=K.set(pid,did,w,ei+1,si,f);
+              const toKey=K.set(pid,did,w,ei,si,f);
+              const v=S.g(fromKey);
+              if(v!==null){S.s(toKey,v);S.d(fromKey);}
+              else S.d(toKey);
+            });
+          }
+          // AW sets
+          for(let ai=0;ai<3;ai++){
+            ['kg','wdh'].forEach(f=>{
+              const fromKey=K.aw(pid,did,w,ei+1,ai,f);
+              const toKey=K.aw(pid,did,w,ei,ai,f);
+              const v=S.g(fromKey);
+              if(v!==null){S.s(toKey,v);S.d(fromKey);}
+              else S.d(toKey);
+            });
+          }
+        }
+        // Non-week keys
+        [K.csets(pid,did,ei+1),K.swap(pid,did,ei+1),KrrEx(pid,did,ei+1),KsetType(pid,did,ei+1,0)].forEach((fromKey,fi)=>{
+          const toKey=[K.csets(pid,did,ei),K.swap(pid,did,ei),KrrEx(pid,did,ei),KsetType(pid,did,ei,0)][fi];
+          const v=S.g(fromKey);
+          if(v!==null){S.s(toKey,v);S.d(fromKey);}
+          else S.d(toKey);
+        });
+      }
+      // Clear last index
+      const lastEi=totalEx-1;
+      for(let w=1;w<=20;w++){
+        for(let si=0;si<20;si++){
+          ['kg','wdh','notiz'].forEach(f=>S.d(K.set(pid,did,w,lastEi,si,f)));
+          for(let ai=0;ai<3;ai++){['kg','wdh'].forEach(f=>S.d(K.aw(pid,did,w,lastEi,ai,f)));}
+        }
+      }
+      S.d(K.csets(pid,did,lastEi));S.d(K.swap(pid,did,lastEi));S.d(KrrEx(pid,did,lastEi));
+    }
+
     // Use original index first (most reliable)
     if(_rmEi>=0&&_rmEi<dy.exercises.length){
+      reindexAfterDelete(_rmPid,_rmDid,_rmEi,dy.exercises.length);
       dy.exercises.splice(_rmEi,1);
       savePlans(plans);
       toast('🗑️ '+_rmName+' entfernt');
@@ -3598,6 +3644,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
     // Fallback: search by name
     const idx=dy.exercises.findIndex(e2=>e2.name===_rmName);
     if(idx>=0){
+      reindexAfterDelete(_rmPid,_rmDid,idx,dy.exercises.length);
       dy.exercises.splice(idx,1);
       savePlans(plans);
       toast('🗑️ '+_rmName+' entfernt');
