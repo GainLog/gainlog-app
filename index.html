@@ -2037,7 +2037,15 @@ function exportPlanAsText(plan){
       const rrSaved=S.gj(KrrEx(plan.id,day.id,ei));
       let rrStr='';
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
-      else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
+      else{
+        // Use Training Typ Selector ranges (from most recent week)
+        const _ttKey='tt_'+plan.id+'_'+day.id+'_w'+currentWeek;
+        const _tt=S.g(_ttKey)||'hyp';
+        const _ttMap={power:{min:3,max:6},hyp:{min:6,max:12},pump:{min:12,max:20}};
+        const _ttR=_ttMap[_tt];
+        if(_ttR)rrStr=' · '+_ttR.min+'–'+_ttR.max+' Wdh';
+        else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
+      }
       txt+='  '+(di*100+ei+1)+'. '+name+NL;
       txt+='     '+sets+' Sätze'+rrStr+(ex.warmup?' (mit AW)':'')+NL+NL;
     });
