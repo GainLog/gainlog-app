@@ -3280,7 +3280,59 @@ function renderLog(){
   tnArea.placeholder='z.B. Heute super Pump, Schulter etwas müde, wenig geschlafen...';
   tnArea.value=S.g(tnKey)||'';
   tnArea.addEventListener('input',()=>S.s(tnKey,tnArea.value));
-  tnDiv.appendChild(tnLabel);tnDiv.appendChild(tnArea);c.appendChild(tnDiv);
+
+  // Mikrofon Button (Web Speech API)
+  const tnMicRow=document.createElement('div');
+  tnMicRow.style.cssText='display:flex;justify-content:flex-end;margin-top:6px';
+  const tnMic=document.createElement('button');
+  tnMic.style.cssText='display:flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:6px 14px;color:var(--muted);font-size:12px;cursor:pointer;transition:all .2s';
+  tnMic.innerHTML='🎤 Sprechen';
+  let _tnRecog=null;
+  let _tnListening=false;
+  tnMic.addEventListener('click',()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){alert('Spracheingabe wird von diesem Browser nicht unterstützt.');return;}
+    if(_tnListening){
+      if(_tnRecog)_tnRecog.stop();
+      return;
+    }
+    _tnRecog=new SR();
+    _tnRecog.lang=USER.lang==='de'?'de-DE':USER.lang==='es'?'es-ES':USER.lang==='it'?'it-IT':'en-US';
+    _tnRecog.interimResults=true;
+    _tnRecog.continuous=true;
+    const baseText=tnArea.value;
+    _tnRecog.onstart=()=>{
+      _tnListening=true;
+      tnMic.innerHTML='🔴 Aufnahme stoppen';
+      tnMic.style.borderColor='#ef4444';
+      tnMic.style.color='#ef4444';
+    };
+    _tnRecog.onresult=(e)=>{
+      let interim='';let final='';
+      for(let i=e.resultIndex;i<e.results.length;i++){
+        if(e.results[i].isFinal)final+=e.results[i][0].transcript;
+        else interim+=e.results[i][0].transcript;
+      }
+      tnArea.value=baseText+(baseText&&final?' ':'')+final+(interim?' '+interim:'');
+      if(final){S.s(tnKey,tnArea.value);}
+    };
+    _tnRecog.onerror=()=>{
+      _tnListening=false;
+      tnMic.innerHTML='🎤 Sprechen';
+      tnMic.style.borderColor='';
+      tnMic.style.color='';
+    };
+    _tnRecog.onend=()=>{
+      _tnListening=false;
+      tnMic.innerHTML='🎤 Sprechen';
+      tnMic.style.borderColor='';
+      tnMic.style.color='';
+      S.s(tnKey,tnArea.value);
+    };
+    _tnRecog.start();
+  });
+  tnMicRow.appendChild(tnMic);
+  tnDiv.appendChild(tnLabel);tnDiv.appendChild(tnArea);tnDiv.appendChild(tnMicRow);c.appendChild(tnDiv);
 
   // Save
   const ss=document.createElement('div');ss.className='ssec';
