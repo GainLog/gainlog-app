@@ -361,8 +361,8 @@ canvas{width:100%!important;display:block}
 .obov.on{display:block}
 
 /* TOAST */
-.toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 16px);left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface2);border:1px solid var(--border2);border-radius:18px;padding:10px 20px;font-size:13px;font-weight:600;transition:transform .3s cubic-bezier(.34,1.56,.64,1);z-index:999;white-space:nowrap;pointer-events:none}
-.toast.on{transform:translateX(-50%) translateY(0)}
+.toast{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 16px);left:50%;transform:translateX(-50%) translateY(80px);opacity:0;background:var(--surface2);border:1px solid var(--border2);border-radius:18px;padding:10px 20px;font-size:13px;font-weight:600;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .3s ease;z-index:999;white-space:nowrap;pointer-events:none}
+.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
 
 select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;padding:9px 11px;width:100%;outline:none;cursor:pointer}
 .wkview{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:10px 10px 8px;border-bottom:1px solid var(--border)}
@@ -3456,7 +3456,7 @@ function renderLog(){
       stopWorkoutTimer(pid,did,week);
     }
     const el=document.getElementById('savets-'+did);if(el)el.textContent='✅ '+s2;
-    updateDash();toast('✅ '+t('saved'));
+    updateDash();toast(t('saved'));
   });
   const cb=document.createElement('button');cb.className='copybtn';cb.textContent=t('copy');
   cb.addEventListener('click',()=>copySummary(plan,day,pid,did,week));
@@ -5595,7 +5595,14 @@ document.getElementById('photo-inp').addEventListener('change',function(){handle
 document.querySelectorAll('#kc-tm,#kc-lm,#kc-kmh,#kc-steig,#kc-steps').forEach(el=>el.addEventListener('input',calcKcalPage));
 
 // ══ TOAST ═════════════════════════════════════════════════
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('on');clearTimeout(window._toastT);window._toastT=setTimeout(()=>t.classList.remove('on'),2500);}
+function toast(msg){
+  const t=document.getElementById('toast');
+  if(!t)return;
+  t.textContent=msg;
+  t.classList.add('on');
+  clearTimeout(window._toastT);
+  window._toastT=setTimeout(()=>{t.classList.remove('on');},2000);
+}
 
 // ══ INIT ══════════════════════════════════════════════════
 lang=USER.lang||'de';
