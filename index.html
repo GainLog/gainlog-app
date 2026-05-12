@@ -2928,6 +2928,17 @@ function buildWorkoutSummary(pid,did,week){
     body.appendChild(row);
   });
 
+  // Tagesnotiz in Zusammenfassung
+  const tnKeySumm='tagesnotiz_'+pid+'_'+did+'_w'+week;
+  const tnText=S.g(tnKeySumm)||'';
+  if(tnText.trim()){
+    const tnRow=document.createElement('div');
+    tnRow.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;margin-bottom:10px';
+    tnRow.innerHTML='<div style="font-size:9px;font-weight:700;color:#555;letter-spacing:1px;margin-bottom:6px">📝 TAGESNOTIZ</div>'
+      +'<div style="font-size:13px;color:var(--text);line-height:1.5;white-space:pre-wrap">'+tnText+'</div>';
+    body.appendChild(tnRow);
+  }
+
   // Kalorien Empfehlung
   const tdee=calcTDEE();
   if(tdee>0){
@@ -3260,6 +3271,17 @@ function renderLog(){
   const csd=document.createElement('div');csd.className='sdiv';csd.textContent=t('cardio').toUpperCase()+' (OPTIONAL)';c.appendChild(csd);
   c.appendChild(buildCardioCard(plan,day,pid,did,week));
 
+  // Tagesnotiz
+  const tnKey='tagesnotiz_'+pid+'_'+did+'_w'+week;
+  const tnDiv=document.createElement('div');tnDiv.style.cssText='margin:0 0 12px 0';
+  const tnLabel=document.createElement('div');tnLabel.style.cssText='font-size:10px;font-weight:700;color:#555;letter-spacing:1px;margin-bottom:6px';tnLabel.textContent='📝 TAGESNOTIZ';
+  const tnArea=document.createElement('textarea');
+  tnArea.style.cssText='width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px;padding:10px 12px;min-height:80px;resize:none;font-family:inherit;line-height:1.5';
+  tnArea.placeholder='z.B. Heute super Pump, Schulter etwas müde, wenig geschlafen...';
+  tnArea.value=S.g(tnKey)||'';
+  tnArea.addEventListener('input',()=>S.s(tnKey,tnArea.value));
+  tnDiv.appendChild(tnLabel);tnDiv.appendChild(tnArea);c.appendChild(tnDiv);
+
   // Save
   const ss=document.createElement('div');ss.className='ssec';
   const ts=S.g(K.saved(pid,did,week))||'';
@@ -3576,8 +3598,18 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       });
       const kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);});
       const wC=makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
-      const nC=makeSinp('text','text',t('note'),sN,v=>{S.s(nK,v)});
-      row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(nC);
+      // Rep Range hint (replaces notiz field)
+      const rrHint=document.createElement('div');
+      rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
+      function updateRRHint(){
+        const _ttKey2='tt_'+pid+'_'+did+'_w'+week;
+        const _tt2=S.g(_ttKey2)||'hyp';
+        const _ttMap={power:{r:'3–6',c:'#f59e0b'},hyp:{r:'6–12',c:'#2563eb'},pump:{r:'12–20',c:'#22c55e'}};
+        const _ttR=_ttMap[_tt2]||_ttMap.hyp;
+        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div style="font-size:12px;font-weight:800;color:'+_ttR.c+'">'+_ttR.r+'</div>';
+      }
+      updateRRHint();
+      row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(rrHint);
       sc.appendChild(row);
       if(si<sets.length-1){
         const trow=document.createElement('div');trow.className='tbrow';
