@@ -2072,16 +2072,18 @@ function exportPlanAsText(plan){
   ta.value=txt;
   const copyBtn=document.createElement('button');
   copyBtn.style.cssText='width:100%;padding:12px;background:#22c55e;border:none;border-radius:10px;color:#000;font-family:sans-serif;font-size:16px;letter-spacing:1px;cursor:pointer';
-  copyBtn.textContent='📋 TEXT KOPIEREN';
+  copyBtn.textContent='📤 TEILEN / KOPIEREN';
   copyBtn.addEventListener('click',function(){
-    try{
-      ta.select();ta.setSelectionRange(0,99999);
-      if(navigator.clipboard&&window.isSecureContext){
-        navigator.clipboard.writeText(ta.value).then(function(){toast('✅ Kopiert!');}).catch(function(){document.execCommand('copy');toast('✅ Kopiert!');});
-      } else {
-        document.execCommand('copy');toast('✅ Kopiert!');
-      }
-    }catch(e){toast('Bitte manuell kopieren');}
+    // Try native share first (iOS), then clipboard, then select
+    if(navigator.share){
+      navigator.share({title:plan.name,text:ta.value}).catch(function(){});
+    } else if(navigator.clipboard&&window.isSecureContext){
+      navigator.clipboard.writeText(ta.value).then(function(){toast('✅ Kopiert!');}).catch(function(){
+        ta.select();ta.setSelectionRange(0,99999);toast('Text markiert – bitte kopieren');
+      });
+    } else {
+      ta.select();ta.setSelectionRange(0,99999);toast('Text markiert – bitte kopieren');
+    }
   });
   box.appendChild(hdr);box.appendChild(ta);box.appendChild(copyBtn);
   modal.appendChild(box);
