@@ -2038,10 +2038,13 @@ function exportPlanAsText(plan){
       let rrStr='';
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
       else{
-        // Use Training Typ Selector ranges (from most recent week)
-        const _ttKey='tt_'+plan.id+'_'+day.id+'_w'+currentWeek;
-        const _tt=S.g(_ttKey)||'hyp';
+        // Scan all weeks for most recently set Training Typ
         const _ttMap={power:{min:3,max:6},hyp:{min:6,max:12},pump:{min:12,max:20}};
+        let _tt='hyp';
+        for(let _w=20;_w>=1;_w--){
+          const _v=S.g('tt_'+plan.id+'_'+day.id+'_w'+_w);
+          if(_v){_tt=_v;break;}
+        }
         const _ttR=_ttMap[_tt];
         if(_ttR)rrStr=' · '+_ttR.min+'–'+_ttR.max+' Wdh';
         else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
