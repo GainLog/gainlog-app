@@ -3297,7 +3297,9 @@ function renderLog(){
       return;
     }
     _tnRecog=new SR();
-    _tnRecog.lang=USER.lang==='de'?'de-DE':USER.lang==='es'?'es-ES':USER.lang==='it'?'it-IT':'en-US';
+    // Use device language if USER.lang not set, default to de-DE
+    const _tnLang=USER.lang||'de';
+    _tnRecog.lang=_tnLang==='es'?'es-ES':_tnLang==='it'?'it-IT':_tnLang==='en'?'en-US':'de-DE';
     _tnRecog.interimResults=true;
     _tnRecog.continuous=true;
     const baseText=tnArea.value;
