@@ -2049,7 +2049,7 @@ function exportPlanAsText(plan){
         if(_ttR)rrStr=' · '+_ttR.min+'–'+_ttR.max+' Wdh';
         else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
       }
-      txt+='  '+(di*100+ei+1)+'. '+name+NL;
+      txt+='  '+(ei+1)+'. '+name+NL;
       txt+='     '+sets+' Sätze'+rrStr+(ex.warmup?' (mit AW)':'')+NL+NL;
     });
     txt+='  Pause: AW '+(day.pauseAW||60)+'s · Arbeit '+(day.pauseWork||180)+'s'+NL+NL;
