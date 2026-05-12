@@ -2033,7 +2033,7 @@ function exportPlanAsText(plan){
     day.exercises.forEach((ex,ei)=>{
       const swapName=S.g(K.swap(plan.id,day.id,ei));
       const name=swapName||ex.name;
-      const sets=ex.sets||3;
+      const sets=getSetCount(plan.id,day.id,ei,ex.sets||3);
       const rrSaved=S.gj(KrrEx(plan.id,day.id,ei));
       let rrStr='';
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
