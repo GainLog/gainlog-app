@@ -1856,6 +1856,7 @@ const K={
   wstart:(pid,did,week)=>`wstart_${pid}_${did}_w${week}`,
   wend:(pid,did,week)=>`wend_${pid}_${did}_w${week}`,
   swap:(pid,did,ei)=>`swap_${pid}_${did}_e${ei}`,
+  uni:(pid,did,ei)=>`uni_${pid}_${did}_e${ei}`,
 };
 
 // ══ MUSCLE DIAGRAMS ═══════════════════════════════════
@@ -2897,6 +2898,14 @@ function buildWorkoutSummary(pid,did,week){
       const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
       if(kg===0&&wdh===0&&si>=exSetCount)break;
+      // For unilateral: use average of L/R, double the volume
+      const _uniEx=S.g(K.uni(pid,did,ei))==='1';
+      let kgUsed=kg;
+      if(_uniEx){
+        const kgL=parseFloat(S.g(K.set(pid,did,week,ei,si,'kgL')))||0;
+        const kgR=parseFloat(S.g(K.set(pid,did,week,ei,si,'kgR')))||0;
+        if(kgL>0||kgR>0)kgUsed=(kgL+kgR)/2;
+      }
       if(kg>0&&wdh>0){
         // stype: custom override → plan default → rir2
         const stypeCustom=S.g(KsetType(pid,did,ei,si));
@@ -2913,8 +2922,9 @@ function buildWorkoutSummary(pid,did,week){
           }
         }
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
-        exVol+=kg*wdh;exSets++;totalSets++;totalVol+=kg*wdh;
-        const rm=kg*(1+wdh/30);if(rm>best1RM)best1RM=rm;
+        const volMult=_uniEx?2:1;
+        exVol+=kgUsed*wdh*volMult;exSets++;totalSets++;totalVol+=kgUsed*wdh*volMult;
+        const rm=kgUsed*(1+wdh/30);if(rm>best1RM)best1RM=rm;
         setDetails.push({si:si+1,kg,wdh,stype,note});
       }
     }
@@ -3624,6 +3634,22 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
 
   const er=document.createElement('div');er.className='exright';
   const prbdg=document.createElement('div');prbdg.className='prbdg';prbdg.id=`pr-${did}-${ei}`;prbdg.textContent='🏆 PR';
+  // Unilateral toggle
+  const uniKey=K.uni(pid,did,ei);
+  let _isUni=S.g(uniKey)==='1';
+  const uniBtn=document.createElement('div');
+  uniBtn.style.cssText='font-size:11px;cursor:pointer;padding:2px 6px;color:'+(_isUni?'#f59e0b':'var(--muted2)')+';transition:color .2s;font-weight:700';
+  uniBtn.title='Einarmig';uniBtn.textContent='1A';
+  uniBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    _isUni=!_isUni;
+    S.s(uniKey,_isUni?'1':'0');
+    uniBtn.style.color=_isUni?'#f59e0b':'var(--muted2)';
+    card.classList.remove('open');
+    setTimeout(()=>{card.classList.add('open');},50);
+    renderLog();
+  });
+
   const swapBtn=document.createElement('div');swapBtn.className='swapbtn';swapBtn.textContent='⇄';
   swapBtn.addEventListener('click',e=>{e.stopPropagation();openSwapModal(pid,did,ei,exName);});
   const removeBtn=document.createElement('div');
@@ -3710,7 +3736,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
   removeBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();doRemove();},{passive:false});
   const chev=document.createElement('div');chev.className='chev';chev.textContent='⌄';
   chev.addEventListener('click',()=>card.classList.toggle('open'));
-  er.appendChild(prbdg);er.appendChild(removeBtn);er.appendChild(swapBtn);er.appendChild(chev);
+  er.appendChild(prbdg);er.appendChild(uniBtn);er.appendChild(removeBtn);er.appendChild(swapBtn);er.appendChild(chev);
   hdr.appendChild(nameTap);hdr.appendChild(er);
   card.appendChild(hdr);
 
@@ -3858,7 +3884,27 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         });
         openSetTypePicker();
       });
-      const kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);});
+      // Unilateral mode: show L/R kg fields instead of single kg
+      const _uniMode=S.g(K.uni(pid,did,ei))==='1';
+      let kgC;
+      if(_uniMode){
+        const kgLK=K.set(pid,did,week,ei,si,'kgL');
+        const kgRK=K.set(pid,did,week,ei,si,'kgR');
+        const sKgL=S.g(kgLK)||'';const sKgR=S.g(kgRK)||'';
+        kgC=document.createElement('div');
+        kgC.style.cssText='display:flex;flex-direction:column;gap:3px;flex:1';
+        const kgLRow=document.createElement('div');kgLRow.style.cssText='display:flex;align-items:center;gap:3px';
+        const kgLLabel=document.createElement('span');kgLLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';kgLLabel.textContent='L';
+        const kgLInput=makeSinp('number','decimal','kg',sKgL,v=>{S.s(kgLK,v);checkPR(pid,did,ei,day);});
+        kgLRow.appendChild(kgLLabel);kgLRow.appendChild(kgLInput);
+        const kgRRow=document.createElement('div');kgRRow.style.cssText='display:flex;align-items:center;gap:3px';
+        const kgRLabel=document.createElement('span');kgRLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';kgRLabel.textContent='R';
+        const kgRInput=makeSinp('number','decimal','kg',sKgR,v=>{S.s(kgRK,v);checkPR(pid,did,ei,day);});
+        kgRRow.appendChild(kgRLabel);kgRRow.appendChild(kgRInput);
+        kgC.appendChild(kgLRow);kgC.appendChild(kgRRow);
+      } else {
+        kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);});
+      }
       const wC=makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
       // Rep Range hint (replaces notiz field)
       const rrHint=document.createElement('div');
