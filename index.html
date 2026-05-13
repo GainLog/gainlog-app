@@ -1763,7 +1763,7 @@ function checkWdhInRange(wdhEl,pid,did,week,ei,si,day){
   // Training Typ override: Power/Hyp/Pump ranges take priority
   const _ttKey='tt_'+pid+'_'+did+'_w'+week;
   const _tt=S.g(_ttKey)||'hyp';
-  const _ttRangeMap={power:{min:3,max:6},hyp:{min:6,max:12},pump:{min:12,max:20}};
+  const _ttRangeMap={power:{min:6,max:10},hyp:{min:10,max:12},pump:{min:15,max:20}};
   const _ttRange=_ttRangeMap[_tt];
   // Try custom range first, then training type, then day default
   const saved=S.gj(KrrEx(pid,did,ei));
@@ -2053,7 +2053,7 @@ function exportPlanAsText(plan){
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
       else{
         // Scan all weeks for most recently set Training Typ
-        const _ttMap={power:{min:3,max:6},hyp:{min:6,max:12},pump:{min:12,max:20}};
+        const _ttMap={power:{min:6,max:10},hyp:{min:10,max:12},pump:{min:15,max:20}};
         let _tt='hyp';
         for(let _w=20;_w>=1;_w--){
           const _v=S.g('tt_'+plan.id+'_'+day.id+'_w'+_w);
@@ -2908,7 +2908,8 @@ function buildWorkoutSummary(pid,did,week){
           if(exType==='all-mv') stype='mv';
           else if(exType==='all-rir') stype='rir2';
           else{ // rir-mv: last set is mv, rest are rir
-            stype=si===cnt2-1?'mv':'rir2';
+            const _exSetCnt=getSetCount(pid,did,ei,ex.sets||3);
+            stype=si>=_exSetCnt-1?'mv':'rir2';
           }
         }
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
@@ -3305,9 +3306,9 @@ function renderLog(){
   const _ttKey='tt_'+pid+'_'+did+'_w'+week;
   let _ttCurrent=S.g(_ttKey)||'hyp';
   const _ttRanges={
-    power:{label:'⚡ Power',color:'#f59e0b',reps:'3–6 Wdh',rest:'3–5 Min',note:'Schwer, explosiv, viel Pause'},
-    hyp:{label:'💪 Hypertrophie',color:'#2563eb',reps:'6–12 Wdh',rest:'120–180 Sek',note:'Moderates Gewicht, kontrolliert'},
-    pump:{label:'🔥 Pump',color:'#22c55e',reps:'12–20 Wdh',rest:'30–60 Sek',note:'Leicht, hohes Volumen, kurze Pause'}
+    power:{label:'⚡ Power',color:'#f59e0b',reps:'6–10 Wdh',rest:'3–5 Min',note:'Schwer, explosiv, viel Pause'},
+    hyp:{label:'💪 Hypertrophie',color:'#2563eb',reps:'10–12 Wdh',rest:'120–180 Sek',note:'Moderates Gewicht, kontrolliert'},
+    pump:{label:'🔥 Pump',color:'#22c55e',reps:'15–20 Wdh',rest:'30–60 Sek',note:'Leicht, hohes Volumen, kurze Pause'}
   };
   const ttWrap=document.createElement('div');
   ttWrap.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:10px';
@@ -3813,7 +3814,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       function updateRRHint(){
         const _ttKey2='tt_'+pid+'_'+did+'_w'+week;
         const _tt2=S.g(_ttKey2)||'hyp';
-        const _ttMap={power:{r:'3–6',c:'#f59e0b'},hyp:{r:'6–12',c:'#2563eb'},pump:{r:'12–20',c:'#22c55e'}};
+        const _ttMap={power:{r:'6–10',c:'#f59e0b'},hyp:{r:'10–12',c:'#2563eb'},pump:{r:'15–20',c:'#22c55e'}};
         const _ttR=_ttMap[_tt2]||_ttMap.hyp;
         rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div style="font-size:12px;font-weight:800;color:'+_ttR.c+'">'+_ttR.r+'</div>';
       }
