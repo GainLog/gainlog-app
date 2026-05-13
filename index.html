@@ -3541,6 +3541,58 @@ function _reorderExercises(pid,did,fromIdx,toIdx){
   if(!plan)return;
   const day=plan.days.find(d=>d.id===did);
   if(!day||!day.exercises)return;
+  if(fromIdx===toIdx)return;
+  const n=day.exercises.length;
+
+  // Reindex storage keys to match new order
+  // Strategy: save all data to temp keys, then write back in new order
+  const TEMP='_tmp_reorder_';
+  const dataKeys=(ei)=>{
+    const keys=[];
+    for(let w=1;w<=20;w++){
+      for(let si=0;si<20;si++){
+        ['kg','wdh','notiz'].forEach(f=>keys.push({from:K.set(pid,did,w,ei,si,f),type:'set',w,si,f}));
+        for(let ai=0;ai<3;ai++){['kg','wdh'].forEach(f=>keys.push({from:K.aw(pid,did,w,ei,ai,f),type:'aw',w,ai,f}));}
+      }
+    }
+    keys.push({from:K.csets(pid,did,ei),type:'single'});
+    keys.push({from:K.swap(pid,did,ei),type:'single'});
+    keys.push({from:KrrEx(pid,did,ei),type:'single'});
+    for(let si=0;si<20;si++)keys.push({from:KsetType(pid,did,ei,si),type:'single'});
+    return keys;
+  };
+
+  // Save all to temp
+  for(let ei=0;ei<n;ei++){
+    dataKeys(ei).forEach(k=>{
+      const v=S.g(k.from);
+      if(v!==null)S.s(TEMP+k.from,v);
+    });
+  }
+
+  // Build new order array
+  const newOrder=[...Array(n).keys()];
+  const [fi]=newOrder.splice(fromIdx,1);
+  newOrder.splice(toIdx,0,fi);
+
+  // Write back in new order
+  for(let newEi=0;newEi<n;newEi++){
+    const oldEi=newOrder[newEi];
+    dataKeys(oldEi).forEach(k=>{
+      // Derive new key by replacing old ei with newEi
+      const newKey=k.from.replace(new RegExp('_e'+oldEi+'(\b|_|$)'),'_e'+newEi+'$1');
+      const v=S.g(TEMP+k.from);
+      if(v!==null)S.s(newKey,v);
+      else S.d(newKey);
+    });
+  }
+
+  // Clean up temp keys
+  for(let ei=0;ei<n;ei++){
+    dataKeys(ei).forEach(k=>S.d(TEMP+k.from));
+  }
+
+  // Update plan object
   const exercises=[...day.exercises];
   const [moved]=exercises.splice(fromIdx,1);
   exercises.splice(toIdx,0,moved);
