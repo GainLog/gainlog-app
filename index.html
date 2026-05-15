@@ -2916,9 +2916,13 @@ function buildWorkoutSummary(pid,did,week){
           const cnt2=getSetCount(pid,did,ei,ex.sets||3);
           if(exType==='all-mv') stype='mv';
           else if(exType==='all-rir') stype='rir2';
-          else{ // rir-mv: last set is mv, rest are rir
-            const _exSetCnt=getSetCount(pid,did,ei,ex.sets||3);
-            stype=si>=_exSetCnt-1?'mv':'rir2';
+          else{ // rir-mv: if user explicitly set MV on badge, use mv for all unset sets
+            // Check if any set has MV → assume all unset are also MV
+            let anyMV=false;
+            for(let _si2=0;_si2<20;_si2++){
+              if(S.g(KsetType(pid,did,ei,_si2))==='mv'){anyMV=true;break;}
+            }
+            stype=anyMV?'mv':'rir2';
           }
         }
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
