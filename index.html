@@ -2785,7 +2785,7 @@ function calcPerformanceScore(pid,did,week){
     for(let si=0;si<cnt;si++){
       const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
-      const stype=S.g(KsetType(pid,did,ei,si))||'rir2';
+      const stype=S.g(KsetType(pid,did,ei,si))||'mv';
 
       if(kg>0&&wdh>0){
         exHasSets=true;
@@ -2915,19 +2915,10 @@ function buildWorkoutSummary(pid,did,week){
         const stypeCustom=S.g(KsetType(pid,did,ei,si));
         let stype=stypeCustom;
         if(!stype){
-          // Derive from plan exercise type
+          // No custom type set: derive from plan exercise type
           const exType=ex.type||'rir-mv';
-          const cnt2=getSetCount(pid,did,ei,ex.sets||3);
-          if(exType==='all-mv') stype='mv';
-          else if(exType==='all-rir') stype='rir2';
-          else{ // rir-mv: if user explicitly set MV on badge, use mv for all unset sets
-            // Check if any set has MV → assume all unset are also MV
-            let anyMV=false;
-            for(let _si2=0;_si2<20;_si2++){
-              if(S.g(KsetType(pid,did,ei,_si2))==='mv'){anyMV=true;break;}
-            }
-            stype=anyMV?'mv':'rir2';
-          }
+          if(exType==='all-rir') stype='rir2'; // only use rir2 if plan explicitly says all-rir
+          else stype='mv'; // default to MV for all-mv and rir-mv plans
         }
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
         const volMult=_uniEx?2:1;
@@ -3135,7 +3126,7 @@ function saveWorkoutHistory(pid,did,week){
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
       if(kg===0&&wdh===0&&si>=getSetCount(pid,did,ei,ex.sets||3))break;
       if(kg>0&&wdh>0){
-        const stype=S.g(KsetType(pid,did,ei,si))||'rir2';
+        const stype=S.g(KsetType(pid,did,ei,si))||'mv';
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
         vol+=kg*wdh;totalSets++;totalVol+=kg*wdh;
         const rm=kg*(1+wdh/30);if(rm>best1RM)best1RM=rm;
@@ -5002,7 +4993,7 @@ async function copySummary(plan,day,pid,did,week){
       const reps=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh'))||0);
       if(kg===0&&reps===0&&si>=getSetCount(pid,did,ei,ex.sets||3))break;
       if(kg>0||reps>0){
-        const stype=S.g(KsetType(pid,did,ei,si))||'rir2';
+        const stype=S.g(KsetType(pid,did,ei,si))||'mv';
         const stypeLbl=stypeNames[stype]||stype.toUpperCase();
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
         const onerm=kg&&reps?Math.round(kg*(1+reps/30)):0;
