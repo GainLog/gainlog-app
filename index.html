@@ -2898,13 +2898,17 @@ function buildWorkoutSummary(pid,did,week){
       const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
       if(kg===0&&wdh===0&&si>=exSetCount)break;
-      // For unilateral: use average of L/R, double the volume
+      // For unilateral: use average of L/R for kg and wdh, double the volume
       const _uniEx=S.g(K.uni(pid,did,ei))==='1';
       let kgUsed=kg;
+      let wdhUsed=wdh;
       if(_uniEx){
         const kgL=parseFloat(S.g(K.set(pid,did,week,ei,si,'kgL')))||0;
         const kgR=parseFloat(S.g(K.set(pid,did,week,ei,si,'kgR')))||0;
+        const wdhL=parseInt(S.g(K.set(pid,did,week,ei,si,'wdhL')))||0;
+        const wdhR=parseInt(S.g(K.set(pid,did,week,ei,si,'wdhR')))||0;
         if(kgL>0||kgR>0)kgUsed=(kgL+kgR)/2;
+        if(wdhL>0||wdhR>0)wdhUsed=Math.round((wdhL+wdhR)/2);
       }
       if(kg>0&&wdh>0){
         // stype: custom override → plan default → rir2
@@ -2927,8 +2931,8 @@ function buildWorkoutSummary(pid,did,week){
         }
         const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
         const volMult=_uniEx?2:1;
-        exVol+=kgUsed*wdh*volMult;exSets++;totalSets++;totalVol+=kgUsed*wdh*volMult;
-        const rm=kgUsed*(1+wdh/30);if(rm>best1RM)best1RM=rm;
+        exVol+=kgUsed*wdhUsed*volMult;exSets++;totalSets++;totalVol+=kgUsed*wdhUsed*volMult;
+        const rm=kgUsed*(1+wdhUsed/30);if(rm>best1RM)best1RM=rm;
         setDetails.push({si:si+1,kg,wdh,stype,note});
       }
     }
@@ -3891,7 +3895,10 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       if(_uniMode){
         const kgLK=K.set(pid,did,week,ei,si,'kgL');
         const kgRK=K.set(pid,did,week,ei,si,'kgR');
+        const wLK=K.set(pid,did,week,ei,si,'wdhL');
+        const wRK=K.set(pid,did,week,ei,si,'wdhR');
         const sKgL=S.g(kgLK)||'';const sKgR=S.g(kgRK)||'';
+        const sWL=S.g(wLK)||'';const sWR=S.g(wRK)||'';
         kgC=document.createElement('div');
         kgC.style.cssText='display:flex;flex-direction:column;gap:3px;flex:1';
         const kgLRow=document.createElement('div');kgLRow.style.cssText='display:flex;align-items:center;gap:3px';
@@ -3903,10 +3910,23 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         const kgRInput=makeSinp('number','decimal','kg',sKgR,v=>{S.s(kgRK,v);checkPR(pid,did,ei,day);});
         kgRRow.appendChild(kgRLabel);kgRRow.appendChild(kgRInput);
         kgC.appendChild(kgLRow);kgC.appendChild(kgRRow);
+        // Wdh L/R
+        const wC_uni=document.createElement('div');
+        wC_uni.style.cssText='display:flex;flex-direction:column;gap:3px;flex:1';
+        const wLRow=document.createElement('div');wLRow.style.cssText='display:flex;align-items:center;gap:3px';
+        const wLLabel=document.createElement('span');wLLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';wLLabel.textContent='L';
+        const wLInput=makeSinp('number','numeric',t('reps'),sWL,v=>{S.s(wLK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+        wLRow.appendChild(wLLabel);wLRow.appendChild(wLInput);
+        const wRRow=document.createElement('div');wRRow.style.cssText='display:flex;align-items:center;gap:3px';
+        const wRLabel=document.createElement('span');wRLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';wRLabel.textContent='R';
+        const wRInput=makeSinp('number','numeric',t('reps'),sWR,v=>{S.s(wRK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+        wRRow.appendChild(wRLabel);wRRow.appendChild(wRInput);
+        wC_uni.appendChild(wLRow);wC_uni.appendChild(wRRow);
+        row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC_uni);
       } else {
         kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);});
       }
-      const wC=makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+      const wC=_uniMode?null:makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
       // Rep Range hint (replaces notiz field)
       const rrHint=document.createElement('div');
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
@@ -3918,7 +3938,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div style="font-size:12px;font-weight:800;color:'+_ttR.c+'">'+_ttR.r+'</div>';
       }
       updateRRHint();
-      row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(rrHint);
+      if(!_uniMode){row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(rrHint);}else{row.appendChild(rrHint);}
       sc.appendChild(row);
       if(si<sets.length-1){
         const trow=document.createElement('div');trow.className='tbrow';
