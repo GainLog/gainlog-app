@@ -2720,7 +2720,7 @@ function calcMET(kmh,steig){
   return(sm*.1+sm*g*1.8+3.5)/3.5;
 }
 function calcLaufKcal(min,kmh,steig){return Math.round(calcMET(kmh||5,steig||0)*USER.gewicht*(min/60))}
-function calcTrainKcal(min,pf){return Math.round(7*min*(1-pf))}
+function calcTrainKcal(min,pf){return Math.round(5*min)}
 function calcMakros(total){
   const p=Math.round(USER.gewicht*1.8),pK=p*4,fK=Math.round(total*.25),fat=Math.round(fK/9),cK=total-pK-fK,carbs=Math.round(cK/4);
   return{p,fat,carbs,pK,fK,cK};
@@ -3066,11 +3066,8 @@ function buildWorkoutSummary(pid,did,week){
   const tdee=calcTDEE();
   if(tdee>0){
     // Calculate avg pause fraction from actual exercise pauses
-    const avgPause=exercises.length>0
-      ? exercises.reduce((s,e)=>s+(e.pause||180),0)/exercises.length
-      : 180;
-    const summaryPf=Math.min(0.7,avgPause/(avgPause+45)); // pause/(pause+~45s active)
-    const tK=calcTrainKcal(Math.max(20,Math.round(dur/60)),summaryPf);
+    // Use full brutto training time - metabolism stays elevated during pauses (EPOC)
+    const tK=calcTrainKcal(Math.max(20,Math.round(dur/60)),0);
     const recKcal=tdee+tK;
     const m=calcMakros(recKcal);
     const kcalLbl=lang==='es'?'Calorías recomendadas hoy':lang==='en'?'Recommended calories today':'Empfohlene Kalorien heute';
@@ -4172,13 +4169,13 @@ function onKW(pid,did,week,pf){
   const tK=tm>0?calcTrainKcal(tm,pf):0;
   const tdee=calcTDEE();
   const total=tdee+tK+lK;
-  const netMin=Math.round(tm*(1-pf));
+  const netMin=tm; // Brutto-Zeit = Netto (Pausen zählen mit)
 
   const lklEl=document.getElementById(`klk-${did}`);
   if(lklEl)lklEl.textContent=lm>0?`≈ ${lK} kcal · ${kmh}km/h · ${steig}% Steigung`:'';
 
   const tkcEl=document.getElementById(`ktk-${did}`);if(tkcEl)tkcEl.textContent=tm?tK:'–';
-  const netEl=document.getElementById(`knet-${did}`);if(netEl)netEl.textContent=tm?`Netto: ${netMin} Min aktiv`:'';
+  const netEl=document.getElementById(`knet-${did}`);if(netEl)netEl.textContent=tm?`Gesamtzeit: ${netMin} Min (inkl. Pausen)`:'  ';
   const sumEl=document.getElementById(`ksum-${did}`);if(sumEl)sumEl.textContent=(tm||lm)?total+' kcal':'Zeit eingeben ↓';
 
   const resEl=document.getElementById(`kres-${did}`);
