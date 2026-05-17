@@ -2614,6 +2614,21 @@ function getAudioCtx(){
 document.addEventListener('touchstart',unlockAudio,{once:false,passive:true});
 document.addEventListener('click',unlockAudio,{once:false,passive:true});
 
+function gentleFlash(){
+  // Sanfter weißer Schimmer + Vibration
+  if(navigator.vibrate){navigator.vibrate([80]);}
+  const flash=document.createElement('div');
+  flash.style.cssText='position:fixed;inset:0;background:#fff;opacity:0;z-index:99999;pointer-events:none;transition:opacity .3s ease';
+  document.body.appendChild(flash);
+  requestAnimationFrame(()=>{
+    flash.style.opacity='0.15';
+    setTimeout(()=>{
+      flash.style.opacity='0';
+      setTimeout(()=>flash.remove(),350);
+    },350);
+  });
+}
+
 function playBell(isPause){
   // Try to unlock if not yet done
   unlockAudio();
@@ -2671,6 +2686,7 @@ function startTimer(secs,lbl){
     if(_tl<=0){
       clearInterval(_ti);
       playBell(true);
+      gentleFlash();
       const te=document.getElementById('tov');
       if(te){te.classList.remove('on');te.style.display='';}
       toast('✅ '+t('worksets')+'!');
