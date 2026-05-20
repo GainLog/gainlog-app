@@ -2925,8 +2925,11 @@ function buildWorkoutSummary(pid,did,week){
         const wdhR=parseInt(S.g(K.set(pid,did,week,ei,si,'wdhR')))||0;
         if(kgL>0||kgR>0)kgUsed=(kgL+kgR)/2;
         if(wdhL>0||wdhR>0)wdhUsed=Math.round((wdhL+wdhR)/2);
+        // For uni: if we have L/R data, override kg/wdh even if main fields empty
+        if((kgL>0||kgR>0)&&kgUsed===0)kgUsed=(kgL+kgR)/2;
+        if((wdhL>0||wdhR>0)&&wdhUsed===0)wdhUsed=Math.round((wdhL+wdhR)/2);
       }
-      if(kg>0&&wdh>0){
+      if(kgUsed>0&&wdhUsed>0){
         // stype: custom override → plan default → rir2
         const stypeCustom=S.g(KsetType(pid,did,ei,si));
         let stype=stypeCustom;
