@@ -1586,6 +1586,20 @@ const DB=[
   {de:'Langhantel Bizepscurl',en:'Barbell Bicep Curl',es:'Curl bíceps con barra',it:'Curl bilanciere bicipiti',cat:'Bizeps',typ:'Kurzhantel'},
   {de:'Skull Crusher (Langhantel)',en:'Barbell Skull Crusher',es:'Skull crusher con barra',it:'Skull crusher con bilanciere',cat:'Trizeps',typ:'Kurzhantel'},
   {de:'Shrugs (Langhantel)',en:'Barbell Shrugs',es:'Encogimientos con barra',it:'Scrollate spalle bilanciere',cat:'Rücken',typ:'Kurzhantel'},
+  // ── CARDIO ──────────────────────────────────────────────
+  {de:'Laufband',en:'Treadmill',es:'Cinta de correr',it:'Tapis roulant',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Crosstrainer (Ellipsentrainer)',en:'Elliptical Trainer',es:'Elíptica',it:'Ellittica',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Fahrradergometer',en:'Exercise Bike',es:'Bicicleta estática',it:'Cyclette',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Liegefahrrad (Recumbent Bike)',en:'Recumbent Bike',es:'Bicicleta reclinada',it:'Bici reclinata',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Ruderergometer',en:'Rowing Machine',es:'Máquina de remo',it:'Vogatore',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Stepper',en:'Stair Stepper',es:'Stepper',it:'Stepper',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Treppensteiger (StairMaster)',en:'StairMaster',es:'StairMaster',it:'StairMaster',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Skiergometer (SkiErg)',en:'Ski Erg',es:'Ski Erg',it:'Ski Erg',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Assault Bike',en:'Assault Bike',es:'Assault Bike',it:'Assault Bike',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Schwimmen',en:'Swimming',es:'Natación',it:'Nuoto',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Seilspringen',en:'Jump Rope',es:'Comba',it:'Corda',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Radfahren (draußen)',en:'Outdoor Cycling',es:'Ciclismo exterior',it:'Ciclismo outdoor',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Laufen (draußen)',en:'Outdoor Running',es:'Correr exterior',it:'Corsa outdoor',cat:'Cardio',typ:'Cardio',cardio:true},
 ];
 function getAllDB(){return [...DB,...(S.gj('customdb')||[])]}
 
@@ -1760,14 +1774,10 @@ function getDefaultRRForDay(day){
 }
 
 function checkWdhInRange(wdhEl,pid,did,week,ei,si,day){
-  // Training Typ override: Power/Hyp/Pump ranges take priority
-  const _ttKey='tt_'+pid+'_'+did+'_w'+week;
-  const _tt=S.g(_ttKey)||'hyp';
-  const _ttRangeMap={power:{min:6,max:10},hyp:{min:10,max:12},pump:{min:15,max:20}};
-  const _ttRange=_ttRangeMap[_tt];
-  // Try custom range first, then training type, then day default
+  // Use per-exercise range if set, else use day range picker, else day default
   const saved=S.gj(KrrEx(pid,did,ei));
-  const range=saved&&saved.min?saved:(_ttRange||( day?getDefaultRRForDay(day):null));
+  const _dayRR=S.gj('dayrr_'+pid+'_'+did);
+  const range=saved&&saved.min?saved:(_dayRR&&_dayRR.min?_dayRR:(day?getDefaultRRForDay(day):null));
   wdhEl.style.borderColor='';wdhEl.style.background='';wdhEl.title='';
   if(!range||!range.min)return;
   const wdh=parseInt(wdhEl.value)||0;
@@ -2053,19 +2063,20 @@ function exportPlanAsText(plan){
       let rrStr='';
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
       else{
-        // Scan all weeks for most recently set Training Typ
-        const _ttMap={power:{min:6,max:10},hyp:{min:10,max:12},pump:{min:15,max:20}};
-        let _tt='hyp';
-        for(let _w=20;_w>=1;_w--){
-          const _v=S.g('tt_'+plan.id+'_'+day.id+'_w'+_w);
-          if(_v){_tt=_v;break;}
-        }
-        const _ttR=_ttMap[_tt];
-        if(_ttR)rrStr=' · '+_ttR.min+'–'+_ttR.max+' Wdh';
+        // Use day rep range picker value
+        const _dayRRExp=S.gj('dayrr_'+plan.id+'_'+day.id);
+        if(_dayRRExp&&_dayRRExp.min)rrStr=' · '+_dayRRExp.min+'–'+_dayRRExp.max+' Wdh';
         else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
       }
       txt+='  '+(ei+1)+'. '+name+NL;
-      txt+='     '+sets+' Sätze'+rrStr+(ex.warmup?' (mit AW)':'')+NL+NL;
+      if(ex.cardio){
+        const cMin=S.g(K.set(plan.id,day.id,1,ei,0,'kg'))||'?';
+        const cKmh=S.g(K.set(plan.id,day.id,1,ei,0,'wdh'))||'';
+        const cSteig=S.g(K.set(plan.id,day.id,1,ei,0,'notiz'))||'';
+        txt+='     🏃 '+cMin+' Min'+(cKmh?' · '+cKmh+' km/h':'')+(cSteig?' · '+cSteig+'% Steigung':'')+NL+NL;
+      } else {
+        txt+='     '+sets+' Sätze'+rrStr+(ex.warmup?' (mit AW)':'')+NL+NL;
+      }
     });
     txt+='  Pause: AW '+(day.pauseAW||60)+'s · Arbeit '+(day.pauseWork||180)+'s'+NL+NL;
   });
@@ -2914,6 +2925,19 @@ function buildWorkoutSummary(pid,did,week){
       const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
       if(kg===0&&wdh===0&&si>=exSetCount)break;
+      // Skip cardio in normal volume summary - handle separately
+      if(ex.cardio){
+        const cMin=parseFloat(S.g(K.set(pid,did,week,ei,0,'kg')))||0;
+        const cKmh=parseFloat(S.g(K.set(pid,did,week,ei,0,'wdh')))||0;
+        const cSteig=parseFloat(S.g(K.set(pid,did,week,ei,0,'notiz')))||0;
+        if(cMin>0){
+          const nm=S.g(K.swap(pid,did,ei))||ex.name;
+          const kcalC=Math.round(cMin*(cKmh>8?10:cKmh>5?7:5));
+          exercises.push({name:nm,sets:0,vol:0,oneRM:0,pr:false,setDetails:[],pause:0,cardio:true,cMin,cKmh,cSteig,kcalC});
+          totalVol+=0;
+        }
+        return;
+      }
       // For unilateral: use average of L/R for kg and wdh, double the volume
       const _uniEx=S.g(K.uni(pid,did,ei))==='1';
       let kgUsed=kg;
@@ -3045,8 +3069,12 @@ function buildWorkoutSummary(pid,did,week){
       +(ex.pr?'<div style="background:rgba(245,158,11,.15);border:1px solid rgba(245,158,11,.3);border-radius:5px;padding:2px 7px;font-size:9px;font-weight:800;color:var(--gold)">🏆 PR</div>':'')
       +'</div>';
     // Summary line with pause
-    const pauseStr=ex.pause>=60?Math.round(ex.pause/60)+'min '+((ex.pause%60)>0?(ex.pause%60)+'s':''):ex.pause+'s';
-    html+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+ex.sets+' Sätze · '+ex.vol+'kg Volumen'+(ex.oneRM>0?' · 1RM ~'+ex.oneRM+'kg':'')+' · ⏱ '+pauseStr+' Pause</div>';
+    if(ex.cardio){
+      html+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">🏃 '+ex.cMin+' Min'+(ex.cKmh?' · '+ex.cKmh+' km/h':'')+(ex.cSteig?' · '+ex.cSteig+'% Steigung':'')+' · ~'+ex.kcalC+' kcal</div>';
+    } else {
+      const pauseStr=ex.pause>=60?Math.round(ex.pause/60)+'min '+((ex.pause%60)>0?(ex.pause%60)+'s':''):ex.pause+'s';
+      html+='<div style="font-size:10px;color:var(--muted);margin-bottom:6px">'+ex.sets+' Sätze · '+ex.vol+'kg Volumen'+(ex.oneRM>0?' · 1RM ~'+ex.oneRM+'kg':'')+' · ⏱ '+pauseStr+' Pause</div>';
+    }
     // Set details with type + note
     if(ex.setDetails&&ex.setDetails.length){
       html+='<div style="display:flex;flex-direction:column;gap:3px">';
@@ -3327,38 +3355,34 @@ function renderLog(){
   // Kcal widget
   c.appendChild(buildKcalWidget(plan,day,pf));
 
-  // Training Type Selector (Power / Hypertrophie / Pump)
-  const _ttKey='tt_'+pid+'_'+did+'_w'+week;
-  let _ttCurrent=S.g(_ttKey)||'hyp';
-  const _ttRanges={
-    power:{label:'⚡ Power',color:'#f59e0b',reps:'6–10 Wdh',rest:'3–5 Min',note:'Schwer, explosiv, viel Pause'},
-    hyp:{label:'💪 Hypertrophie',color:'#2563eb',reps:'10–12 Wdh',rest:'120–180 Sek',note:'Moderates Gewicht, kontrolliert'},
-    pump:{label:'🔥 Pump',color:'#22c55e',reps:'15–20 Wdh',rest:'30–60 Sek',note:'Leicht, hohes Volumen, kurze Pause'}
-  };
+  // Rep Range Picker – simple Von/Bis inputs
+  const _rrDayKey='dayrr_'+pid+'_'+did;
+  const _rrSaved=S.gj(_rrDayKey)||{min:6,max:12};
   const ttWrap=document.createElement('div');
-  ttWrap.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:10px';
-  function renderTT(){
-    const cur=_ttRanges[_ttCurrent];
-    ttWrap.innerHTML='<div style="font-size:10px;color:#555;font-weight:700;letter-spacing:1px;margin-bottom:6px">TRAINING TYP</div>'
-      +'<div style="display:flex;gap:6px;margin-bottom:8px">'
-      +Object.entries(_ttRanges).map(([k,v])=>'<button data-tt="'+k+'" style="flex:1;padding:6px 4px;border-radius:8px;border:1px solid '+(k===_ttCurrent?v.color:'#222')+';background:'+(k===_ttCurrent?v.color+'22':'#1a1a1a')+';color:'+(k===_ttCurrent?v.color:'#555')+';font-size:10px;font-weight:700;cursor:pointer">'+v.label+'</button>').join('')
-      +'</div>'
-      +'<div style="display:flex;gap:8px">'
-      +'<div style="flex:1;background:#1a1a1a;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;margin-bottom:2px">REP RANGE</div><div style="font-size:13px;font-weight:700;color:'+cur.color+'">'+cur.reps+'</div></div>'
-      +'<div style="flex:1;background:#1a1a1a;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;margin-bottom:2px">PAUSE</div><div style="font-size:13px;font-weight:700;color:'+cur.color+'">'+cur.rest+'</div></div>'
-      +'<div style="flex:2;background:#1a1a1a;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#555;margin-bottom:2px">FOKUS</div><div style="font-size:11px;color:#888">'+cur.note+'</div></div>'
-      +'</div>';
+  ttWrap.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:10px';
+  const ttLabel=document.createElement('div');
+  ttLabel.style.cssText='font-size:10px;color:#555;font-weight:700;letter-spacing:1px;white-space:nowrap';
+  ttLabel.textContent='REP RANGE';
+  const ttMin=document.createElement('input');
+  ttMin.type='number';ttMin.inputMode='numeric';
+  ttMin.value=_rrSaved.min;ttMin.min=1;ttMin.max=100;
+  ttMin.style.cssText='flex:1;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:8px;text-align:center;font-size:16px;font-weight:700;color:var(--green);width:0';
+  const ttSep=document.createElement('div');
+  ttSep.style.cssText='font-size:14px;color:#555;font-weight:700';ttSep.textContent='–';
+  const ttMax=document.createElement('input');
+  ttMax.type='number';ttMax.inputMode='numeric';
+  ttMax.value=_rrSaved.max;ttMax.min=1;ttMax.max=100;
+  ttMax.style.cssText='flex:1;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:8px;text-align:center;font-size:16px;font-weight:700;color:var(--green);width:0';
+  const ttUnit=document.createElement('div');
+  ttUnit.style.cssText='font-size:11px;color:#555;white-space:nowrap';ttUnit.textContent='Wdh';
+  function saveDayRR(){
+    const mn=parseInt(ttMin.value)||1;
+    const mx=parseInt(ttMax.value)||mn;
+    S.sj(_rrDayKey,{min:Math.min(mn,mx),max:Math.max(mn,mx)});
   }
-  renderTT();
-  ttWrap.addEventListener('click',function(e){
-    const btn=e.target.closest('[data-tt]');
-    if(!btn)return;
-    _ttCurrent=btn.getAttribute('data-tt');
-    S.s(_ttKey,_ttCurrent);
-    renderTT();
-    // Re-attach listener after re-render
-    ttWrap.addEventListener('click',arguments.callee,{once:true});
-  });
+  ttMin.addEventListener('change',saveDayRR);
+  ttMax.addEventListener('change',saveDayRR);
+  ttWrap.appendChild(ttLabel);ttWrap.appendChild(ttMin);ttWrap.appendChild(ttSep);ttWrap.appendChild(ttMax);ttWrap.appendChild(ttUnit);
   c.appendChild(ttWrap);
 
   // Legend
@@ -3402,8 +3426,7 @@ function renderLog(){
   c.appendChild(addBtn);
 
   // Cardio
-  const csd=document.createElement('div');csd.className='sdiv';csd.textContent=t('cardio').toUpperCase()+' (OPTIONAL)';c.appendChild(csd);
-  c.appendChild(buildCardioCard(plan,day,pid,did,week));
+  // Cardio section removed – covered by workout log
 
   // Tagesnotiz
   const tnKey='tagesnotiz_'+pid+'_'+did+'_w'+week;
@@ -3644,11 +3667,11 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
   const en=document.createElement('div');en.className='exname';en.textContent=exName;
   const em=document.createElement('div');em.className='exmeta';
   const setsCount=getSetCount(pid,did,ei,ex.sets||3);
-  em.textContent=(ex.warmup?'3 AW + ':'')+setsCount+' '+t('worksets').toLowerCase()+' · '+ex.type;
+  em.textContent=ex.cardio?'🏃 Cardio · Dauer · Tempo · Steigung':(ex.warmup?'3 AW + ':'')+setsCount+' '+t('worksets').toLowerCase()+' · '+ex.type;
   nameTap.appendChild(en);nameTap.appendChild(em);
 
   const er=document.createElement('div');er.className='exright';
-  const prbdg=document.createElement('div');prbdg.className='prbdg';prbdg.id=`pr-${did}-${ei}`;prbdg.textContent='🏆 PR';
+  const prbdg=document.createElement('div');prbdg.className='prbdg';prbdg.id=`pr-${did}-${ei}`;prbdg.textContent='🏆 PR';if(ex.cardio)prbdg.style.display='none';
   // Unilateral toggle
   const uniKey=K.uni(pid,did,ei);
   let _isUni=S.g(uniKey)==='1';
@@ -3751,7 +3774,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
   removeBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();doRemove();},{passive:false});
   const chev=document.createElement('div');chev.className='chev';chev.textContent='⌄';
   chev.addEventListener('click',()=>card.classList.toggle('open'));
-  er.appendChild(prbdg);er.appendChild(uniBtn);er.appendChild(removeBtn);er.appendChild(swapBtn);er.appendChild(chev);
+  er.appendChild(prbdg);if(!ex.cardio)er.appendChild(uniBtn);er.appendChild(removeBtn);er.appendChild(swapBtn);er.appendChild(chev);
   hdr.appendChild(nameTap);hdr.appendChild(er);
   card.appendChild(hdr);
 
@@ -3860,6 +3883,42 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
 
   function buildSets(){
     sc.innerHTML='';
+    // CARDIO MODE: show Min/km-h/Steigung instead of sets
+    if(ex.cardio){
+      const cMinK=K.set(pid,did,week,ei,0,'kg'); // reuse kg for minutes
+      const cKmhK=K.set(pid,did,week,ei,0,'wdh'); // reuse wdh for kmh
+      const cSteigK=K.set(pid,did,week,ei,0,'notiz'); // reuse notiz for steigung
+      const cMin=S.g(cMinK)||'';const cKmh=S.g(cKmhK)||'';const cSteig=S.g(cSteigK)||'';
+      const cardioRow=document.createElement('div');
+      cardioRow.style.cssText='display:flex;gap:8px;margin-bottom:8px;align-items:flex-end';
+      const fields=[
+        {label:'DAUER (MIN)',val:cMin,key:cMinK,mode:'numeric',placeholder:'Min'},
+        {label:'TEMPO (KM/H)',val:cKmh,key:cKmhK,mode:'decimal',placeholder:'km/h'},
+        {label:'STEIGUNG (%)',val:cSteig,key:cSteigK,mode:'numeric',placeholder:'%'},
+      ];
+      fields.forEach(f=>{
+        const wrap=document.createElement('div');wrap.style.cssText='flex:1;display:flex;flex-direction:column;gap:4px';
+        const lbl=document.createElement('div');lbl.style.cssText='font-size:8px;color:#555;font-weight:700;letter-spacing:1px';lbl.textContent=f.label;
+        const inp=document.createElement('input');
+        inp.type='number';inp.inputMode=f.mode;inp.placeholder=f.placeholder;inp.value=f.val;
+        inp.style.cssText='background:#1a1a1a;border:1px solid #222;border-radius:10px;padding:12px 8px;text-align:center;font-size:18px;font-weight:700;color:var(--green);width:100%';
+        inp.addEventListener('change',()=>S.s(f.key,inp.value));
+        wrap.appendChild(lbl);wrap.appendChild(inp);
+        cardioRow.appendChild(wrap);
+      });
+      sc.appendChild(cardioRow);
+      // Kcal estimate
+      const minVal=parseFloat(S.g(cMinK))||0;
+      const kmhVal=parseFloat(S.g(cKmhK))||0;
+      if(minVal>0){
+        const kcalEst=Math.round(minVal*(kmhVal>8?10:kmhVal>5?7:5));
+        const kcalDiv=document.createElement('div');
+        kcalDiv.style.cssText='font-size:11px;color:#555;text-align:center;padding:4px 0';
+        kcalDiv.textContent='~'+kcalEst+' kcal geschätzt';
+        sc.appendChild(kcalDiv);
+      }
+      return;
+    }
     const cnt=getSetCount(pid,did,ei,ex.sets||3);
     const sets=genSets(cnt,ex.type||'rir-mv');
     sets.forEach((set,si)=>{
@@ -3941,11 +4000,8 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       const rrHint=document.createElement('div');
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
       function updateRRHint(){
-        const _ttKey2='tt_'+pid+'_'+did+'_w'+week;
-        const _tt2=S.g(_ttKey2)||'hyp';
-        const _ttMap={power:{r:'6–10',c:'#f59e0b'},hyp:{r:'10–12',c:'#2563eb'},pump:{r:'15–20',c:'#22c55e'}};
-        const _ttR=_ttMap[_tt2]||_ttMap.hyp;
-        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div style="font-size:12px;font-weight:800;color:'+_ttR.c+'">'+_ttR.r+'</div>';
+        const _rrDay=S.gj('dayrr_'+pid+'_'+did)||{min:6,max:12};
+        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div style="font-size:12px;font-weight:800;color:var(--green)">'+_rrDay.min+'–'+_rrDay.max+'</div>';
       }
       updateRRHint();
       if(!_uniMode){row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(rrHint);}else{row.appendChild(rrHint);}
@@ -3965,7 +4021,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         const fmtSecs=s=>s<60?s+'s':(s%60===0?Math.floor(s/60)+'min':Math.floor(s/60)+':'+String(s%60).padStart(2,'0')+'min');
         tb.textContent=`⏱ ${fmtSecs(pw)} ${t('pause')}`;
         tb.dataset.secs=pw;
-        tb.dataset.lbl=set.l+' Pause';
+        tb.dataset.lbl='Satzpause';
         function _doPause(){
           window.gl_startTimer(parseInt(tb.dataset.secs)||180,tb.dataset.lbl||'Pause');
         }
