@@ -3379,9 +3379,17 @@ function renderLog(){
     const mn=parseInt(ttMin.value)||1;
     const mx=parseInt(ttMax.value)||mn;
     S.sj(_rrDayKey,{min:Math.min(mn,mx),max:Math.max(mn,mx)});
+    // Update all visible range hints live
+    document.querySelectorAll('.rr-hint-val').forEach(el=>{
+      el.textContent=Math.min(mn,mx)+'–'+Math.max(mn,mx);
+    });
+    // Also refresh wdh color coding
+    document.querySelectorAll('.sinp-wdh').forEach(el=>{
+      el.dispatchEvent(new Event('input'));
+    });
   }
-  ttMin.addEventListener('change',saveDayRR);
-  ttMax.addEventListener('change',saveDayRR);
+  ttMin.addEventListener('input',saveDayRR);
+  ttMax.addEventListener('input',saveDayRR);
   ttWrap.appendChild(ttLabel);ttWrap.appendChild(ttMin);ttWrap.appendChild(ttSep);ttWrap.appendChild(ttMax);ttWrap.appendChild(ttUnit);
   c.appendChild(ttWrap);
 
@@ -4001,7 +4009,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
       function updateRRHint(){
         const _rrDay=S.gj('dayrr_'+pid+'_'+did)||{min:6,max:12};
-        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div style="font-size:12px;font-weight:800;color:var(--green)">'+_rrDay.min+'–'+_rrDay.max+'</div>';
+        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div class="rr-hint-val" style="font-size:12px;font-weight:800;color:var(--green)">'+_rrDay.min+'–'+_rrDay.max+'</div>';
       }
       updateRRHint();
       if(!_uniMode){row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(rrHint);}else{row.appendChild(rrHint);}
