@@ -3992,18 +3992,18 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         wC_uni.style.cssText='display:flex;flex-direction:column;gap:3px;flex:1';
         const wLRow=document.createElement('div');wLRow.style.cssText='display:flex;align-items:center;gap:3px';
         const wLLabel=document.createElement('span');wLLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';wLLabel.textContent='L';
-        const wLInput=makeSinp('number','numeric',t('reps'),sWL,v=>{S.s(wLK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+        const wLInput=makeSinp('number','numeric',t('reps'),sWL,v=>{S.s(wLK,v);update1RM();checkPR(pid,did,ei,day);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
         wLRow.appendChild(wLLabel);wLRow.appendChild(wLInput);
         const wRRow=document.createElement('div');wRRow.style.cssText='display:flex;align-items:center;gap:3px';
         const wRLabel=document.createElement('span');wRLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';wRLabel.textContent='R';
-        const wRInput=makeSinp('number','numeric',t('reps'),sWR,v=>{S.s(wRK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+        const wRInput=makeSinp('number','numeric',t('reps'),sWR,v=>{S.s(wRK,v);update1RM();checkPR(pid,did,ei,day);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
         wRRow.appendChild(wRLabel);wRRow.appendChild(wRInput);
         wC_uni.appendChild(wLRow);wC_uni.appendChild(wRRow);
         row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC_uni);
       } else {
         kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);});
       }
-      const wC=_uniMode?null:makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+      const wC=_uniMode?null:makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();checkPR(pid,did,ei,day);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
       // Rep Range hint (replaces notiz field)
       const rrHint=document.createElement('div');
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
