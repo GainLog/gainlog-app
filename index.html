@@ -139,6 +139,8 @@ body.light .hdr{background:rgba(244,244,245,.95)}
 .wotimer{background:var(--surface);border:1px solid var(--border2);border-radius:var(--radius);padding:13px 15px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
 .wotimernum{font-family:'Bebas Neue',sans-serif;font-size:32px;letter-spacing:2px;color:var(--blue2)}
 .wotimerbtns{display:flex;gap:7px}
+.wotpause{background:rgba(245,158,11,.15);color:var(--gold);border:1px solid rgba(245,158,11,.3)}
+.wotresume{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
 .wotbtn{padding:8px 14px;border-radius:var(--radius-sm);border:none;font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:1px;cursor:pointer}
 .wotstart{background:var(--green);color:#000}
 .wotstop{background:var(--red);color:#fff}
@@ -1865,6 +1867,7 @@ const K={
   extra:(pid,did,week)=>`extra_${pid}_${did}_w${week}`,
   wstart:(pid,did,week)=>`wstart_${pid}_${did}_w${week}`,
   wend:(pid,did,week)=>`wend_${pid}_${did}_w${week}`,
+  wpause:(pid,did,week)=>`wpause_${pid}_${did}_w${week}`,
   swap:(pid,did,ei)=>`swap_${pid}_${did}_e${ei}`,
   uni:(pid,did,ei)=>`uni_${pid}_${did}_e${ei}`,
 };
@@ -2768,6 +2771,30 @@ function startWorkoutTimer(pid,did,week){
   toast('▶ Workout gestartet!');
 }
 
+function pauseWorkoutTimer(pid,did,week){
+  const startStr=S.g(K.wstart(pid,did,week));
+  if(!startStr)return;
+  const pausedData=S.gj(K.wpause(pid,did,week));
+  if(pausedData&&pausedData.pausedAt)return;
+  S.sj(K.wpause(pid,did,week),{pausedAt:Date.now()});
+  clearInterval(_woInterval);
+  _woRunning=false;
+  updateWoTimerDisplay(pid,did,week);
+}
+function resumeWorkoutTimer(pid,did,week){
+  const pausedData=S.gj(K.wpause(pid,did,week));
+  if(!pausedData||!pausedData.pausedAt)return;
+  const pauseDur=Date.now()-pausedData.pausedAt;
+  const startStr=S.g(K.wstart(pid,did,week));
+  if(startStr){
+    const newStart=new Date(new Date(startStr).getTime()+pauseDur).toISOString();
+    S.s(K.wstart(pid,did,week),newStart);
+  }
+  S.d(K.wpause(pid,did,week));
+  _woRunning=true;
+  _startWoTick(pid,did,week);
+  toast('▶ Weiter!');
+}
 function _startWoTick(pid,did,week){
   clearInterval(_woInterval);
   // Update every second - always calculates from stored timestamp
@@ -3215,9 +3242,10 @@ function updateWoTimerDisplay(pid,did,week){
   const startStr=S.g(K.wstart(pid,did,week));
   const endStr=S.g(K.wend(pid,did,week));
   if(!startStr)return;
-  // Always calculate from stored ISO timestamp - not from tick count
   const start=new Date(startStr);
-  const end=endStr?new Date(endStr):new Date();
+  // If paused: freeze display at the moment pause was pressed
+  const pausedData=S.gj(K.wpause(pid,did,week));
+  const end=endStr?new Date(endStr):pausedData&&pausedData.pausedAt?new Date(pausedData.pausedAt):new Date();
   const diff=Math.max(0,Math.floor((end-start)/1000));
   const h=Math.floor(diff/3600),m=Math.floor((diff%3600)/60),s=diff%60;
   const fmt=h>0?h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'):String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
@@ -3228,6 +3256,8 @@ function updateWoTimerDisplay(pid,did,week){
       const st=start.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       const et=new Date(endStr).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
       sl.textContent=st+' → '+et+' Uhr';
+    } else if(pausedData&&pausedData.pausedAt){
+      sl.textContent='⏸ Pausiert';
     } else {
       sl.textContent='Gestartet: '+start.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})+' Uhr';
     }
@@ -3245,19 +3275,26 @@ function buildWoTimerCard(pid,did,week){
   left.appendChild(lbl);left.appendChild(num);left.appendChild(sub);
 
   const btns=document.createElement('div');btns.className='wotimerbtns';
+  const _initPausedData=S.gj(K.wpause(pid,did,week));
   if(!startStr||endStr){
-    // Show start button
     const startBtn=document.createElement('button');startBtn.className='wotbtn wotstart';startBtn.textContent='▶ START';
     startBtn.addEventListener('click',()=>{
       if(endStr){resetWorkoutTimer(pid,did,week);setTimeout(()=>{startWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);},100);}
       else{startWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);}
     });
     btns.appendChild(startBtn);
-  } else {
-    // Show stop button
+  } else if(_initPausedData&&_initPausedData.pausedAt){
+    const resumeBtn=document.createElement('button');resumeBtn.className='wotbtn wotresume';resumeBtn.textContent='▶ WEITER';
+    resumeBtn.addEventListener('click',()=>{resumeWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
     const stopBtn=document.createElement('button');stopBtn.className='wotbtn wotstop';stopBtn.textContent='⏹ STOP';
     stopBtn.addEventListener('click',()=>{stopWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
-    btns.appendChild(stopBtn);
+    btns.appendChild(resumeBtn);btns.appendChild(stopBtn);
+  } else {
+    const pauseBtn=document.createElement('button');pauseBtn.className='wotbtn wotpause';pauseBtn.textContent='⏸ PAUSE';
+    pauseBtn.addEventListener('click',()=>{pauseWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
+    const stopBtn=document.createElement('button');stopBtn.className='wotbtn wotstop';stopBtn.textContent='⏹ STOP';
+    stopBtn.addEventListener('click',()=>{stopWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
+    btns.appendChild(pauseBtn);btns.appendChild(stopBtn);
   }
 
   d.appendChild(left);d.appendChild(btns);
@@ -3274,6 +3311,7 @@ function renderWoTimerBtns(btns,pid,did,week){
   btns.innerHTML='';
   const startStr=S.g(K.wstart(pid,did,week));
   const endStr=S.g(K.wend(pid,did,week));
+  const pausedData=S.gj(K.wpause(pid,did,week));
   if(!startStr||endStr){
     const startBtn=document.createElement('button');startBtn.className='wotbtn wotstart';startBtn.textContent='▶ START';
     startBtn.addEventListener('click',()=>{
@@ -3281,10 +3319,18 @@ function renderWoTimerBtns(btns,pid,did,week){
       else{startWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);}
     });
     btns.appendChild(startBtn);
-  } else {
+  } else if(pausedData&&pausedData.pausedAt){
+    const resumeBtn=document.createElement('button');resumeBtn.className='wotbtn wotresume';resumeBtn.textContent='▶ WEITER';
+    resumeBtn.addEventListener('click',()=>{resumeWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
     const stopBtn=document.createElement('button');stopBtn.className='wotbtn wotstop';stopBtn.textContent='⏹ STOP';
     stopBtn.addEventListener('click',()=>{stopWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
-    btns.appendChild(stopBtn);
+    btns.appendChild(resumeBtn);btns.appendChild(stopBtn);
+  } else {
+    const pauseBtn=document.createElement('button');pauseBtn.className='wotbtn wotpause';pauseBtn.textContent='⏸ PAUSE';
+    pauseBtn.addEventListener('click',()=>{pauseWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
+    const stopBtn=document.createElement('button');stopBtn.className='wotbtn wotstop';stopBtn.textContent='⏹ STOP';
+    stopBtn.addEventListener('click',()=>{stopWorkoutTimer(pid,did,week);renderWoTimerBtns(btns,pid,did,week);});
+    btns.appendChild(pauseBtn);btns.appendChild(stopBtn);
   }
 }
 
@@ -4417,17 +4463,6 @@ function selectSwap(idx){
     }
   }
   S.s(K.swap(_swapPid,_swapDid,_swapEi),ex.de);
-  // Clear all stored weights/reps for this exercise index across all weeks (wrong exercise data)
-  for(let _w=1;_w<=52;_w++){
-    for(let _si=0;_si<20;_si++){
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kg'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdh'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgL'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgR'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhL'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhR'));
-    }
-  }
   document.getElementById('swapMov').classList.remove('on');
   renderLog();toast('✅ '+ex.de);
 }
