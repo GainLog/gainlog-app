@@ -2675,13 +2675,20 @@ function playBell(isPause){
   }
 }
 
+let _timerEndTs=null,_timerLbl='Pause';
+function _timerFire(){
+  clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
+  playBell(true);
+  gentleFlash();
+  const te=document.getElementById('tov');
+  if(te){te.classList.remove('on');te.style.display='';}
+  toast('✅ '+t('worksets')+'!');
+}
 function startTimer(secs,lbl){
   if(!secs||secs<=0)return;
-  // Unlock audio immediately on timer start (iOS PWA requirement)
   unlockAudio();
   const ac=getAudioCtx();
   if(ac&&ac.state==='suspended')ac.resume();
-  // Play silent buffer to fully unlock iOS audio
   if(ac){
     try{
       const buf=ac.createBuffer(1,1,22050);
@@ -2689,23 +2696,20 @@ function startTimer(secs,lbl){
       src.buffer=buf;src.connect(ac.destination);src.start(0);
     }catch(e){}
   }
-  clearInterval(_ti);_tt=secs;_tl=secs;
+  clearInterval(_ti);
+  _tt=secs;_tl=secs;_timerLbl=lbl||'Pause';
+  _timerEndTs=Date.now()+(secs*1000);
   const lblEl=document.getElementById('trlbl');
-  if(lblEl)lblEl.textContent=lbl||'Pause';
+  if(lblEl)lblEl.textContent=_timerLbl;
   const tovEl=document.getElementById('tov');
   if(tovEl){tovEl.style.display='flex';tovEl.classList.add('on');}
   updateTimerUI();
   _ti=setInterval(()=>{
-    _tl--;
-    if(_tl<=0){
-      clearInterval(_ti);
-      playBell(true);
-      gentleFlash();
-      const te=document.getElementById('tov');
-      if(te){te.classList.remove('on');te.style.display='';}
-      toast('✅ '+t('worksets')+'!');
-    } else updateTimerUI();
-  },1000);
+    if(!_timerEndTs){clearInterval(_ti);return;}
+    _tl=Math.max(0,Math.round((_timerEndTs-Date.now())/1000));
+    if(_tl<=0){_timerFire();}
+    else updateTimerUI();
+  },500);
 }
 // Global helper for inline onclick – most reliable on iOS
 window.gl_startTimer=function(secs,lbl){startTimer(secs,lbl);}
@@ -3403,6 +3407,7 @@ function renderLog(){
 
   // Rep Range Picker – simple Von/Bis inputs
   const _rrDayKey='dayrr_'+pid+'_'+did;
+  if(day.rrMin&&day.rrMax){const _existing=S.gj(_rrDayKey);if(!_existing||_existing._fromPlan){S.sj(_rrDayKey,{min:day.rrMin,max:day.rrMax,_fromPlan:true});}}
   const _rrSaved=S.gj(_rrDayKey)||{min:6,max:12};
   const ttWrap=document.createElement('div');
   ttWrap.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:10px';
@@ -3424,7 +3429,7 @@ function renderLog(){
   function saveDayRR(){
     const mn=parseInt(ttMin.value)||1;
     const mx=parseInt(ttMax.value)||mn;
-    S.sj(_rrDayKey,{min:Math.min(mn,mx),max:Math.max(mn,mx)});
+    S.sj(_rrDayKey,{min:Math.min(mn,mx),max:Math.max(mn,mx),_fromPlan:false});
     // Update all visible range hints live
     document.querySelectorAll('.rr-hint-val').forEach(el=>{
       el.textContent=Math.min(mn,mx)+'–'+Math.max(mn,mx);
@@ -4087,7 +4092,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         // Quick pause time buttons
         const quickRow=document.createElement('div');
         quickRow.style.cssText='display:flex;gap:4px;justify-content:center;flex-wrap:wrap';
-        [60,90,120,180,240,300].forEach(secs=>{
+        [60,90,120,150,180,210,240,270,300].forEach(secs=>{
           const qb=document.createElement('button');
           const isActive=secs===pw;
           qb.style.cssText='padding:3px 8px;border-radius:10px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid '+(isActive?'var(--blue)':'var(--border)')+';background:'+(isActive?'var(--blue-dim)':'transparent')+';color:'+(isActive?'var(--blue2)':'var(--muted)');
@@ -4098,7 +4103,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
             tb.dataset.secs=secs;
             tb.textContent=`⏱ ${fmtSecs(secs)} ${t('pause')}`;
             quickRow.querySelectorAll('button').forEach((b,bi)=>{
-              const active=[60,90,120,180,240,300][bi]===secs;
+              const active=[60,90,120,150,180,210,240,270,300][bi]===secs;
               b.style.borderColor=active?'var(--blue)':'var(--border)';
               b.style.background=active?'var(--blue-dim)':'transparent';
               b.style.color=active?'var(--blue2)':'var(--muted)';
@@ -4109,7 +4114,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
             tb.dataset.secs=secs;
             tb.textContent=`⏱ ${fmtSecs(secs)} ${t('pause')}`;
             quickRow.querySelectorAll('button').forEach((b,bi)=>{
-              const active=[60,90,120,180,240,300][bi]===secs;
+              const active=[60,90,120,150,180,210,240,270,300][bi]===secs;
               b.style.borderColor=active?'var(--blue)':'var(--border)';
               b.style.background=active?'var(--blue-dim)':'transparent';
               b.style.color=active?'var(--blue2)':'var(--muted)';
@@ -4463,6 +4468,17 @@ function selectSwap(idx){
     }
   }
   S.s(K.swap(_swapPid,_swapDid,_swapEi),ex.de);
+  // Clear all stored weights/reps for this exercise index across all weeks
+  for(let _w=1;_w<=52;_w++){
+    for(let _si=0;_si<20;_si++){
+      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kg'));
+      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdh'));
+      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgL'));
+      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgR'));
+      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhL'));
+      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhR'));
+    }
+  }
   document.getElementById('swapMov').classList.remove('on');
   renderLog();toast('✅ '+ex.de);
 }
@@ -4902,6 +4918,22 @@ function renderPBDays(){
       pf.appendChild(pl);pf.appendChild(pi);prow.appendChild(pf);
     });
     dbody.appendChild(prow);
+
+    // Rep Range per day
+    const rrRow=document.createElement('div');rrRow.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:10px;background:#0d0d0d;border:1px solid #222;border-radius:10px;padding:8px 12px';
+    const rrLbl=document.createElement('div');rrLbl.style.cssText='font-size:10px;color:#555;font-weight:700;letter-spacing:1px;white-space:nowrap;flex:0 0 auto';rrLbl.textContent='REP RANGE';
+    const rrMin=document.createElement('input');rrMin.type='number';rrMin.inputMode='numeric';rrMin.placeholder='Von';rrMin.min=1;rrMin.max=100;
+    rrMin.value=day.rrMin||'';
+    rrMin.style.cssText='flex:1;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:7px;text-align:center;font-size:15px;font-weight:700;color:var(--green);width:0;outline:none';
+    const rrSep=document.createElement('div');rrSep.style.cssText='font-size:13px;color:#555;font-weight:700';rrSep.textContent='–';
+    const rrMax=document.createElement('input');rrMax.type='number';rrMax.inputMode='numeric';rrMax.placeholder='Bis';rrMax.min=1;rrMax.max=100;
+    rrMax.value=day.rrMax||'';
+    rrMax.style.cssText='flex:1;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:7px;text-align:center;font-size:15px;font-weight:700;color:var(--green);width:0;outline:none';
+    const rrUnit=document.createElement('div');rrUnit.style.cssText='font-size:11px;color:#555;white-space:nowrap';rrUnit.textContent='Wdh';
+    rrMin.addEventListener('input',()=>{const v=parseInt(rrMin.value);if(v>0)day.rrMin=v;else delete day.rrMin;});
+    rrMax.addEventListener('input',()=>{const v=parseInt(rrMax.value);if(v>0)day.rrMax=v;else delete day.rrMax;});
+    rrRow.appendChild(rrLbl);rrRow.appendChild(rrMin);rrRow.appendChild(rrSep);rrRow.appendChild(rrMax);rrRow.appendChild(rrUnit);
+    dbody.appendChild(rrRow);
 
     // Exercises
     (day.exercises||[]).forEach((ex,exi)=>{
