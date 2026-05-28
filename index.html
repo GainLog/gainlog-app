@@ -2675,20 +2675,13 @@ function playBell(isPause){
   }
 }
 
-let _timerEndTs=null,_timerLbl='Pause';
-function _timerFire(){
-  clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
-  playBell(true);
-  gentleFlash();
-  const te=document.getElementById('tov');
-  if(te){te.classList.remove('on');te.style.display='';}
-  toast('✅ '+t('worksets')+'!');
-}
 function startTimer(secs,lbl){
   if(!secs||secs<=0)return;
+  // Unlock audio immediately on timer start (iOS PWA requirement)
   unlockAudio();
   const ac=getAudioCtx();
   if(ac&&ac.state==='suspended')ac.resume();
+  // Play silent buffer to fully unlock iOS audio
   if(ac){
     try{
       const buf=ac.createBuffer(1,1,22050);
@@ -2696,20 +2689,23 @@ function startTimer(secs,lbl){
       src.buffer=buf;src.connect(ac.destination);src.start(0);
     }catch(e){}
   }
-  clearInterval(_ti);
-  _tt=secs;_tl=secs;_timerLbl=lbl||'Pause';
-  _timerEndTs=Date.now()+(secs*1000);
+  clearInterval(_ti);_tt=secs;_tl=secs;
   const lblEl=document.getElementById('trlbl');
-  if(lblEl)lblEl.textContent=_timerLbl;
+  if(lblEl)lblEl.textContent=lbl||'Pause';
   const tovEl=document.getElementById('tov');
   if(tovEl){tovEl.style.display='flex';tovEl.classList.add('on');}
   updateTimerUI();
   _ti=setInterval(()=>{
-    if(!_timerEndTs){clearInterval(_ti);return;}
-    _tl=Math.max(0,Math.round((_timerEndTs-Date.now())/1000));
-    if(_tl<=0){_timerFire();}
-    else updateTimerUI();
-  },500);
+    _tl--;
+    if(_tl<=0){
+      clearInterval(_ti);
+      playBell(true);
+      gentleFlash();
+      const te=document.getElementById('tov');
+      if(te){te.classList.remove('on');te.style.display='';}
+      toast('✅ '+t('worksets')+'!');
+    } else updateTimerUI();
+  },1000);
 }
 // Global helper for inline onclick – most reliable on iOS
 window.gl_startTimer=function(secs,lbl){startTimer(secs,lbl);}
@@ -3686,8 +3682,10 @@ function _reorderExercises(pid,did,fromIdx,toIdx){
   for(let newEi=0;newEi<n;newEi++){
     const oldEi=newOrder[newEi];
     dataKeys(oldEi).forEach(k=>{
-      // Derive new key by replacing old ei with newEi
-      const newKey=k.from.replace(new RegExp('_e'+oldEi+'(\b|_|$)'),'_e'+newEi+'$1');
+      const eStr='_e'+String(oldEi);const eNew='_e'+String(newEi);
+      let newKey=k.from;
+      if(newKey.includes(eStr+'_'))newKey=newKey.split(eStr+'_').join(eNew+'_');
+      else if(newKey.endsWith(eStr))newKey=newKey.slice(0,-eStr.length)+eNew;
       const v=S.g(TEMP+k.from);
       if(v!==null)S.s(newKey,v);
       else S.d(newKey);
@@ -3790,12 +3788,19 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
           }
         }
         // Non-week keys
-        [K.csets(pid,did,ei+1),K.swap(pid,did,ei+1),KrrEx(pid,did,ei+1),KsetType(pid,did,ei+1,0)].forEach((fromKey,fi)=>{
-          const toKey=[K.csets(pid,did,ei),K.swap(pid,did,ei),KrrEx(pid,did,ei),KsetType(pid,did,ei,0)][fi];
+        [K.csets(pid,did,ei+1),K.swap(pid,did,ei+1),KrrEx(pid,did,ei+1)].forEach((fromKey,fi)=>{
+          const toKey=[K.csets(pid,did,ei),K.swap(pid,did,ei),KrrEx(pid,did,ei)][fi];
           const v=S.g(fromKey);
           if(v!==null){S.s(toKey,v);S.d(fromKey);}
           else S.d(toKey);
         });
+        for(let si2=0;si2<20;si2++){
+          const fromKey2=KsetType(pid,did,ei+1,si2);
+          const toKey2=KsetType(pid,did,ei,si2);
+          const v2=S.g(fromKey2);
+          if(v2!==null){S.s(toKey2,v2);S.d(fromKey2);}
+          else S.d(toKey2);
+        }
       }
       // Clear last index
       const lastEi=totalEx-1;
@@ -4468,17 +4473,7 @@ function selectSwap(idx){
     }
   }
   S.s(K.swap(_swapPid,_swapDid,_swapEi),ex.de);
-  // Clear all stored weights/reps for this exercise index across all weeks
-  for(let _w=1;_w<=52;_w++){
-    for(let _si=0;_si<20;_si++){
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kg'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdh'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgL'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgR'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhL'));
-      S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhR'));
-    }
-  }
+  for(let _w=1;_w<=52;_w++){for(let _si=0;_si<20;_si++){S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kg'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdh'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgL'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgR'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhL'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhR'));}}
   document.getElementById('swapMov').classList.remove('on');
   renderLog();toast('✅ '+ex.de);
 }
