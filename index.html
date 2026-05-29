@@ -849,8 +849,11 @@ select{background:var(--surface2);border:1px solid var(--border);border-radius:v
   <div style="margin:4px 15px 0;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted)">TRAININGSPLÄNE</div>
   <div style="margin:8px 15px 0" id="plan-list"></div>
   <div style="padding:0 15px;margin-top:4px">
-    <button id="new-plan-btn" style="width:100%;padding:12px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;color:var(--blue2);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:12px">+ NEUEN PLAN ERSTELLEN</button>
+    <button id="new-plan-btn" style="width:100%;padding:12px;border-radius:var(--radius);border:1px dashed var(--border2);background:transparent;color:var(--blue2);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-bottom:8px">+ NEUEN PLAN ERSTELLEN</button>
+    <div id="plan-import-wrap"></div>
   </div>
+  <div style="margin:12px 15px 0;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted)">📋 VORLAGEN</div>
+  <div style="margin:8px 15px 0" id="plan-presets"></div>
 
   <div class="pslist">
     <div class="si" style="cursor:pointer;border-color:rgba(37,99,235,.25)" id="p-history" onclick="showWorkoutHistory()"><div class="sileft"><div class="siico">📊</div><div><div class="silbl" style="color:var(--blue2)">Training Historie</div><div class="sisub">Alle Workouts + Bewertungen ansehen</div></div></div><div class="sival" style="color:var(--blue2)">→</div></div>
@@ -2675,13 +2678,20 @@ function playBell(isPause){
   }
 }
 
+let _timerEndTs=null;
+function _timerFire(){
+  clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
+  playBell(true);
+  gentleFlash();
+  const te=document.getElementById('tov');
+  if(te){te.classList.remove('on');te.style.display='';}
+  toast('✅ '+t('worksets')+'!');
+}
 function startTimer(secs,lbl){
   if(!secs||secs<=0)return;
-  // Unlock audio immediately on timer start (iOS PWA requirement)
   unlockAudio();
   const ac=getAudioCtx();
   if(ac&&ac.state==='suspended')ac.resume();
-  // Play silent buffer to fully unlock iOS audio
   if(ac){
     try{
       const buf=ac.createBuffer(1,1,22050);
@@ -2689,23 +2699,20 @@ function startTimer(secs,lbl){
       src.buffer=buf;src.connect(ac.destination);src.start(0);
     }catch(e){}
   }
-  clearInterval(_ti);_tt=secs;_tl=secs;
+  clearInterval(_ti);
+  _tt=secs;_tl=secs;
+  _timerEndTs=Date.now()+(secs*1000);
   const lblEl=document.getElementById('trlbl');
   if(lblEl)lblEl.textContent=lbl||'Pause';
   const tovEl=document.getElementById('tov');
   if(tovEl){tovEl.style.display='flex';tovEl.classList.add('on');}
   updateTimerUI();
   _ti=setInterval(()=>{
-    _tl--;
-    if(_tl<=0){
-      clearInterval(_ti);
-      playBell(true);
-      gentleFlash();
-      const te=document.getElementById('tov');
-      if(te){te.classList.remove('on');te.style.display='';}
-      toast('✅ '+t('worksets')+'!');
-    } else updateTimerUI();
-  },1000);
+    if(!_timerEndTs){clearInterval(_ti);return;}
+    _tl=Math.max(0,Math.round((_timerEndTs-Date.now())/1000));
+    if(_tl<=0){_timerFire();}
+    else updateTimerUI();
+  },500);
 }
 // Global helper for inline onclick – most reliable on iOS
 window.gl_startTimer=function(secs,lbl){startTimer(secs,lbl);}
@@ -4175,8 +4182,9 @@ function getSetCount(pid,did,ei,def){
 
 function checkPR(pid,did,ei,day){
   const bdg=document.getElementById(`pr-${did}-${ei}`);if(!bdg)return;
-  // Only show PR when workout timer is running
-  if(!_woRunning){bdg.style.display='none';return;}
+  // Show PR when workout is running or paused (not stopped)
+  const _woPaused=S.gj(K.wpause(pid,did,currentWeek));
+  if(!_woRunning&&!(_woPaused&&_woPaused.pausedAt)){bdg.style.display='none';return;}
   const cnt=getSetCount(pid,did,ei,3);
   // PR requires BOTH kg AND wdh to be filled in current week
   let curr1RM=0,prev1RM=0;
@@ -5012,6 +5020,384 @@ function savePlan(){
 }
 
 // ══ PROFIL PAGE ═══════════════════════════════════════════
+
+
+// ══ PRESET PLANS ══════════════════════════════════════════
+const PRESET_PLANS = [
+  {
+    name:'3-Tage Ganzkörper',
+    icon:'💪',
+    desc:'Ideal für Einsteiger. Jede Muskelgruppe 3x/Woche. Höchster Hypertrophie-Score für 3-Tage-Splits.',
+    emoji:'🔰',
+    days:[
+      {name:'Ganzkörper A',icon:'💪',type:'training',exercises:[
+        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:2,type:'rir-mv'},
+        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:2,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Ganzkörper B',icon:'🔥',type:'training',exercises:[
+        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'KH Bankdrücken Schrägbank aufwärts',cat:'Brust',typ:'Kurzhantel',sets:3,type:'rir-mv'},
+        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'KH Bizepscurl alternierend',cat:'Arme',typ:'Kurzhantel',sets:2,type:'rir-mv'},
+        {de:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Ganzkörper C',icon:'⚡',type:'training',exercises:[
+        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Schulterpresse (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv'},
+        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  },
+  {
+    name:'4-Tage Upper/Lower',
+    icon:'⚡',
+    desc:'Effizientester Split. 85% der Gains bei 30% weniger Zeit. Jede Muskelgruppe 2x/Woche.',
+    emoji:'🎯',
+    days:[
+      {name:'Upper A',icon:'💪',type:'training',exercises:[
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'LH Rudern vorgebeugt',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'KH Bankdrücken Schrägbank aufwärts',cat:'Brust',typ:'Kurzhantel',sets:3,type:'rir-mv'},
+        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:2,type:'rir-mv'},
+        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:2,type:'rir-mv'}
+      ]},
+      {name:'Lower A',icon:'🦵',type:'training',exercises:[
+        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Stehendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Upper B',icon:'🔥',type:'training',exercises:[
+        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Butterfly (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'KH Bizepscurl alternierend',cat:'Arme',typ:'Kurzhantel',sets:2,type:'rir-mv'},
+        {de:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv'}
+      ]},
+      {name:'Lower B',icon:'⚡',type:'training',exercises:[
+        {de:'Beinpresse weit (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'LH Sumo Kreuzheben',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinbeugen sitzend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Adduktor Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Sitzendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  },
+  {
+    name:'Push / Pull / Legs',
+    icon:'🔥',
+    desc:'Klassischer Intermediate-Split. 6 Trainingstage, jede Muskelgruppe 2x/Woche. Optimale Balance aus Volumen und Frequenz.',
+    emoji:'💯',
+    days:[
+      {name:'Push',icon:'💪',type:'training',exercises:[
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'KH Bankdrücken Schrägbank aufwärts',cat:'Brust',typ:'Kurzhantel',sets:3,type:'rir-mv'},
+        {de:'Butterfly (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv'}
+      ]},
+      {name:'Pull',icon:'🦾',type:'training',exercises:[
+        {de:'LH Rudern vorgebeugt',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:4,type:'rir-mv'},
+        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Gerader Latziehen (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'Face Pulls (Kabel)',cat:'Schulter',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'KH Bizepscurl alternierend',cat:'Arme',typ:'Kurzhantel',sets:3,type:'rir-mv'}
+      ]},
+      {name:'Legs',icon:'🦵',type:'training',exercises:[
+        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'Stehendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'}
+      ]},
+      {name:'Push',icon:'💪',type:'training',exercises:[
+        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Schrägbankpresse aufwärts (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Kabelflyes (Mitte)',cat:'Brust',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'Schulterpresse (Maschine)',cat:'Schulter',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Seitheben (Kabel)',cat:'Schulter',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'Trizepsdrücken Stange (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'Trizepsdrücken Untergriff (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv'}
+      ]},
+      {name:'Pull',icon:'🦾',type:'training',exercises:[
+        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Rudern sitzend weit (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Chest Supported Row (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Überzüge (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Butterfly Reverse (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Bizepscurl (Maschine)',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'KH Bizepscurl beidarmig',cat:'Arme',typ:'Kurzhantel',sets:3,type:'rir-mv'}
+      ]},
+      {name:'Legs',icon:'🦵',type:'training',exercises:[
+        {de:'Beinpresse weit (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Beinbeugen sitzend (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'LH Sumo Kreuzheben',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'Adduktor Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Sitzendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  },
+  {
+    name:'5-Tage PPLUL',
+    icon:'🏆',
+    desc:'Der 5-Tage Sweet Spot. PPL für Hypertrophie-Fokus, Upper/Lower für schwere Compounds. Für Fortgeschrittene.',
+    emoji:'🔝',
+    days:[
+      {name:'Push',icon:'💪',type:'training',exercises:[
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'KH Bankdrücken Schrägbank aufwärts',cat:'Brust',typ:'Kurzhantel',sets:3,type:'rir-mv'},
+        {de:'Butterfly (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv'}
+      ]},
+      {name:'Pull',icon:'🦾',type:'training',exercises:[
+        {de:'LH Rudern vorgebeugt',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:4,type:'rir-mv'},
+        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Face Pulls (Kabel)',cat:'Schulter',typ:'Kabel',sets:3,type:'rir-mv'},
+        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'KH Bizepscurl alternierend',cat:'Arme',typ:'Kurzhantel',sets:3,type:'rir-mv'}
+      ]},
+      {name:'Legs',icon:'🦵',type:'training',exercises:[
+        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Stehendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'}
+      ]},
+      {name:'Upper',icon:'🔥',type:'training',exercises:[
+        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Chest Supported Row (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Schrägbankpresse aufwärts (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Schulterpresse (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Bizepscurl (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv'},
+        {de:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv'}
+      ]},
+      {name:'Lower',icon:'⚡',type:'training',exercises:[
+        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv'},
+        {de:'Beinpresse weit (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'},
+        {de:'Beinbeugen sitzend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'LH Sumo Kreuzheben',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv'},
+        {de:'Adduktor Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv'},
+        {de:'Sitzendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv'}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  },
+  {
+    name:'PHUL – Power & Hypertrophie',
+    icon:'💥',
+    desc:'Power Hypertrophy Upper Lower. Kombination aus Kraft (3-5 Wdh) und Hypertrophie (8-12 Wdh). Für Fortgeschrittene die beides wollen.',
+    emoji:'⚡',
+    days:[
+      {name:'Upper Power',icon:'💥',type:'training',exercises:[
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
+        {de:'LH Rudern vorgebeugt',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
+        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:3,type:'rir-mv',rrMin:3,rrMax:5},
+        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',rrMin:4,rrMax:6},
+        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:3,type:'rir-mv',rrMin:6,rrMax:8},
+        {de:'Trizepsdrücken Stange (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',rrMin:6,rrMax:8}
+      ]},
+      {name:'Lower Power',icon:'⚡',type:'training',exercises:[
+        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
+        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
+        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',rrMin:5,rrMax:8},
+        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',rrMin:5,rrMax:8},
+        {de:'Stehendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:6,rrMax:8}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Upper Hypertrophie',icon:'🔥',type:'training',exercises:[
+        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',rrMin:8,rrMax:12},
+        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',rrMin:8,rrMax:12},
+        {de:'Butterfly (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',rrMin:10,rrMax:15},
+        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',rrMin:10,rrMax:12},
+        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
+        {de:'Bizepscurl (Maschine)',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',rrMin:10,rrMax:15},
+        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',rrMin:10,rrMax:15}
+      ]},
+      {name:'Lower Hypertrophie',icon:'🦵',type:'training',exercises:[
+        {de:'Beinpresse weit (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
+        {de:'Beinbeugen sitzend (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
+        {de:'LH Sumo Kreuzheben',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv',rrMin:8,rrMax:12},
+        {de:'Adduktor Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',rrMin:12,rrMax:15},
+        {de:'Sitzendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:12,rrMax:20}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  }
+];
+
+function loadPresetPlan(idx){
+  const preset=PRESET_PLANS[idx];
+  if(!preset)return;
+  const newPid='p_preset_'+Date.now();
+  const newPlan={
+    id:newPid,
+    name:preset.name,
+    icon:preset.icon,
+    desc:preset.desc,
+    days:preset.days.map(d=>({
+      ...d,
+      id:'d_preset_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+      exercises:(d.exercises||[]).map(e=>({...e}))
+    }))
+  };
+  const plans=getPlans();
+  plans.push(newPlan);
+  savePlans(plans);
+  renderPlanList();
+  renderImportBtn();
+  toast('✅ '+preset.name+' geladen!');
+}
+
+function renderPresetSection(){
+  const el=document.getElementById('plan-presets');
+  if(!el)return;
+  el.innerHTML='';
+  PRESET_PLANS.forEach((p,i)=>{
+    const card=document.createElement('div');
+    card.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px';
+    const left=document.createElement('div');
+    const title=document.createElement('div');
+    title.style.cssText='font-size:13px;font-weight:700;color:#fff;margin-bottom:2px';
+    title.textContent=p.icon+' '+p.name;
+    const desc=document.createElement('div');
+    desc.style.cssText='font-size:10px;color:#555;line-height:1.4';
+    desc.textContent=p.desc;
+    left.appendChild(title);left.appendChild(desc);
+    const btn=document.createElement('button');
+    btn.style.cssText='flex-shrink:0;padding:6px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap';
+    btn.textContent='Laden';
+    btn.addEventListener('click',()=>loadPresetPlan(i));
+    card.appendChild(left);card.appendChild(btn);
+    el.appendChild(card);
+  });
+}
+
+// ══ PLAN EXPORT / IMPORT ══════════════════════════════════
+function exportPlan(pid){
+  const plans=getPlans();
+  const plan=plans.find(p=>p.id===pid);
+  if(!plan){toast('❌ Plan nicht gefunden');return;}
+
+  // Collect all localStorage keys for this plan
+  const data={};
+  const prefix='gl_';
+  for(let i=0;i<localStorage.length;i++){
+    const fullKey=localStorage.key(i);
+    if(!fullKey.startsWith(prefix))continue;
+    const k=fullKey.slice(prefix.length);
+    // Match keys containing pid or did of this plan
+    const dids=plan.days.map(d=>d.id);
+    const relevant=k.includes(pid)||dids.some(did=>k.includes(did));
+    if(relevant)data[k]=localStorage.getItem(fullKey);
+  }
+
+  const exportObj={
+    version:1,
+    exportedAt:new Date().toISOString().slice(0,10),
+    name:plan.name,
+    plan:plan,
+    data:data
+  };
+
+  const json=JSON.stringify(exportObj,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=(plan.name.replace(/[^a-zA-Z0-9äöüÄÖÜß ]/g,'_')||'plan')+'_'+new Date().toISOString().slice(0,10)+'.gainlog';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+  toast('⬇️ '+plan.name+' exportiert!');
+}
+
+function importPlan(file){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const obj=JSON.parse(e.target.result);
+      if(!obj.plan||!obj.data){toast('❌ Ungültige .gainlog Datei');return;}
+
+      // Remap IDs to avoid conflicts
+      const oldPid=obj.plan.id;
+      const newPid='p_imp_'+Date.now();
+      const didMap={};
+      const newPlan=JSON.parse(JSON.stringify(obj.plan));
+      newPlan.id=newPid;
+      newPlan.name=obj.name||obj.plan.name;
+      newPlan.days=newPlan.days.map(d=>{
+        const newDid='d_imp_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+        didMap[d.id]=newDid;
+        return {...d,id:newDid};
+      });
+
+      // Save remapped plan
+      const plans=getPlans();
+      plans.push(newPlan);
+      savePlans(plans);
+
+      // Remap and restore all data keys
+      Object.entries(obj.data).forEach(([k,v])=>{
+        let newKey=k.replace(oldPid,newPid);
+        Object.entries(didMap).forEach(([oldDid,newDid])=>{
+          newKey=newKey.split(oldDid).join(newDid);
+        });
+        localStorage.setItem('gl_'+newKey,v);
+      });
+
+      renderPlanList();
+      toast('✅ '+newPlan.name+' importiert!');
+    }catch(err){
+      toast('❌ Fehler beim Import');
+      console.error(err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function openImportFile(){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.gainlog';
+  inp.addEventListener('change',()=>{if(inp.files[0])importPlan(inp.files[0]);});
+  inp.click();
+}
+
 function renderPlanList(){
   const el=document.getElementById('plan-list');if(!el)return;
   const plans=getPlans();const activeId=getActivePlanId();
@@ -5033,13 +5419,27 @@ function renderPlanList(){
       if(plan.id===activeId&&pl2.length)setActivePlan(pl2[0].id);
       renderPlanList();renderLog();toast('🗑️ Plan gelöscht');
     });
-    acts.appendChild(editBtn);acts.appendChild(delBtn);
+    const expBtn=document.createElement('button');expBtn.className='planbtn';expBtn.title='Plan exportieren';expBtn.textContent='⬇️';
+    expBtn.addEventListener('click',e=>{e.stopPropagation();exportPlan(plan.id);});
+    acts.appendChild(editBtn);acts.appendChild(expBtn);acts.appendChild(delBtn);
     card.appendChild(info);card.appendChild(acts);
     card.addEventListener('click',()=>{setActivePlan(plan.id);currentDayId=(plan.days&&plan.days[0]&&plan.days[0].id)||null;if(currentDayId)setCurrentDay(currentDayId);renderLog();renderPlanList();showPage('log');toast('✅ '+plan.name+' aktiviert');});
     el.appendChild(card);
   });
 }
 
+function renderImportBtn(){
+  const el=document.getElementById('plan-import-wrap');
+  if(!el)return;
+  el.innerHTML='';
+  const btn=document.createElement('button');
+  btn.style.cssText='width:100%;padding:12px;background:transparent;border:1.5px dashed #333;border-radius:12px;color:#555;font-size:13px;font-weight:700;letter-spacing:.5px;cursor:pointer;margin-top:4px;transition:all .2s';
+  btn.textContent='⬆️ Plan importieren (.gainlog)';
+  btn.addEventListener('click',openImportFile);
+  btn.addEventListener('mouseenter',()=>btn.style.borderColor='var(--blue)');
+  btn.addEventListener('mouseleave',()=>btn.style.borderColor='#333');
+  el.appendChild(btn);
+}
 function loadProfilPage(){
   document.getElementById('p-name').value=USER.name||'';
   document.getElementById('p-weight').value=USER.gewicht||'';
@@ -5049,7 +5449,7 @@ function loadProfilPage(){
   const psub=document.getElementById('p-sub');
   if(psub)psub.textContent={recomp:'Body Recomp',aufbau:'Muskelaufbau',abnehmen:'Abnehmen'}[USER.goal||'recomp'];
   loadProfilPhoto();
-  renderPlanList();
+  renderPlanList();renderImportBtn();renderPresetSection();
 }
 
 function loadProfilPhoto(){
