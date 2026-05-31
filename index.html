@@ -1291,7 +1291,6 @@ const DB=[
   {de:'KH Bankdrücken Schrägbank abwärts',en:'Decline Dumbbell Press',es:'Press mancuernas declinado',cat:'Brust',typ:'Kurzhantel'},
   {de:'KH Flyes flach',en:'Dumbbell Fly Flat',es:'Aperturas mancuernas plano',cat:'Brust',typ:'Kurzhantel'},
   {de:'KH Flyes Schrägbank aufwärts',en:'Incline Dumbbell Fly',es:'Aperturas mancuernas inclinado',cat:'Brust',typ:'Kurzhantel'},
-  {de:'KH Pullover',en:'Dumbbell Pullover',es:'Pullover con mancuerna',cat:'Brust',typ:'Kurzhantel'},
   {de:'KH Squeeze Press',en:'Dumbbell Squeeze Press',es:'Press con compresión',cat:'Brust',typ:'Kurzhantel'},
 
   // ══ RÜCKEN ═════════════════════════════════════════════════════
@@ -1334,7 +1333,7 @@ const DB=[
   {de:'Einarmiges KH Rudern',en:'One Arm Dumbbell Row',es:'Remo un brazo mancuerna',cat:'Rücken',typ:'Kurzhantel'},
   {de:'KH Rudern beidarmig',en:'Dumbbell Two Arm Row',es:'Remo dos brazos mancuerna',cat:'Rücken',typ:'Kurzhantel'},
   {de:'KH Shrugs',en:'Dumbbell Shrugs',es:'Encogimientos mancuerna',cat:'Schulter',typ:'Kurzhantel'},
-  {de:'KH Pullover',en:'Dumbbell Pullover',es:'Pullover mancuerna',cat:'Rücken',typ:'Kurzhantel'},
+  {de:'KH Pullover (Rücken)',en:'Dumbbell Pullover Back',es:'Pullover mancuerna espalda',cat:'Rücken',typ:'Kurzhantel'},
   {de:'KH Reverse Flyes',en:'Dumbbell Rear Delt Fly',es:'Aperturas inversas mancuerna',cat:'Schulter',typ:'Kurzhantel'},
   {de:'KH Rückenstrecker',en:'Dumbbell Back Extension',es:'Extensión espalda mancuerna',cat:'Rücken',typ:'Kurzhantel'},
 
@@ -1489,16 +1488,13 @@ const DB=[
   {de:'Suitcase Carry (KH)',en:'Suitcase Carry',es:'Acarreo maletín',cat:'Core',typ:'Kurzhantel'},
 
   // ══ CARDIO ════════════════════════════════════════════════════════
-  {de:'Laufband',en:'Treadmill',es:'Cinta de correr',cat:'Cardio',typ:'Maschine'},
   {de:'Laufband Incline Walk',en:'Incline Treadmill Walk',es:'Caminata inclinada',cat:'Cardio',typ:'Maschine'},
   {de:'Crosstrainer (Elliptical)',en:'Elliptical Trainer',es:'Elíptica',cat:'Cardio',typ:'Maschine'},
   {de:'Fahrrad (Ergometer)',en:'Stationary Bike',es:'Bicicleta estática',cat:'Cardio',typ:'Maschine'},
   {de:'Fahrrad stehend (Spinning)',en:'Spin Bike',es:'Bicicleta spinning',cat:'Cardio',typ:'Maschine'},
   {de:'Rudergerät',en:'Rowing Machine',es:'Máquina de remo',cat:'Cardio',typ:'Maschine'},
   {de:'Stairmaster (Stufenstepper)',en:'Stairmaster',es:'Escaladora',cat:'Cardio',typ:'Maschine'},
-  {de:'Assault Bike',en:'Assault Bike',es:'Bicicleta assault',cat:'Cardio',typ:'Maschine'},
   {de:'Ski Ergometer',en:'Ski Erg',es:'Esquí ergómetro',cat:'Cardio',typ:'Maschine'},
-  {de:'Seilspringen',en:'Jump Rope',es:'Saltar la cuerda',cat:'Cardio',typ:'Kurzhantel'},
   {de:'Battle Ropes',en:'Battle Ropes',es:'Cuerdas de batalla',it:'Battle Ropes',cat:'Cardio',typ:'Kurzhantel'},
   {de:'Box Jumps',en:'Box Jumps',es:'Saltos al cajón',it:'Salti sulla box',cat:'Cardio',typ:'Kurzhantel'},
   // ══ LANGHANTEL (FREIE GEWICHTE) ═════════════════════════
@@ -1605,6 +1601,55 @@ const DB=[
   {de:'Seilspringen',en:'Jump Rope',es:'Comba',it:'Corda',cat:'Cardio',typ:'Cardio',cardio:true},
   {de:'Radfahren (draußen)',en:'Outdoor Cycling',es:'Ciclismo exterior',it:'Ciclismo outdoor',cat:'Cardio',typ:'Cardio',cardio:true},
   {de:'Laufen (draußen)',en:'Outdoor Running',es:'Correr exterior',it:'Corsa outdoor',cat:'Cardio',typ:'Cardio',cardio:true},
+  // ── PLATE LOADED – BEINE ─────────────────────────────────
+  {de:'Beinpresse Plate Loaded',en:'Plate Loaded Leg Press',es:'Prensa pierna plate loaded',it:'Pressa gambe plate loaded',cat:'Beine',typ:'Maschine'},
+  {de:'Beinpresse 45° Plate Loaded',en:'Plate Loaded 45° Leg Press',es:'Prensa 45° plate loaded',it:'Pressa 45° plate loaded',cat:'Beine',typ:'Maschine'},
+  {de:'Beinbeugen liegend Plate Loaded',en:'Plate Loaded Lying Leg Curl',es:'Curl femoral tumbado plate loaded',it:'Curl femorale sdraiato plate loaded',cat:'Beine',typ:'Maschine'},
+  {de:'Beinbeugen sitzend Plate Loaded',en:'Plate Loaded Seated Leg Curl',es:'Curl femoral sentado plate loaded',it:'Curl femorale seduto plate loaded',cat:'Beine',typ:'Maschine'},
+  {de:'Plate Loaded Beinstrecker',en:'Plate Loaded Leg Extension',es:'Extensión cuádriceps plate loaded',it:'Estensione quadricipiti plate loaded',cat:'Beine',typ:'Maschine'},
+  {de:'Hip Thrust Plate Loaded',en:'Plate Loaded Hip Thrust',es:'Hip thrust plate loaded',it:'Hip thrust plate loaded',cat:'Beine',typ:'Maschine'},
+  {de:'Glute Ham Developer (GHD)',en:'Glute Ham Developer',es:'Glute ham developer',it:'Glute ham developer',cat:'Beine',typ:'Maschine'},
+  {de:'Iso-Laterale Beinpresse (Maschine)',en:'Iso-Lateral Leg Press',es:'Prensa isoinercial',it:'Pressa isoinerziale',cat:'Beine',typ:'Maschine'},
+  {de:'Smith Machine Kniebeuge',en:'Smith Machine Squat',es:'Sentadilla en Smith',it:'Squat al multipower',cat:'Beine',typ:'Maschine'},
+  {de:'Smith Machine Hip Thrust',en:'Smith Machine Hip Thrust',es:'Hip thrust en Smith',it:'Hip thrust al multipower',cat:'Beine',typ:'Maschine'},
+  {de:'Smith Machine Romanian Deadlift',en:'Smith Machine Romanian Deadlift',es:'Peso muerto rumano Smith',it:'Stacco rumeno al multipower',cat:'Beine',typ:'Maschine'},
+  {de:'Smith Machine Ausfallschritt',en:'Smith Machine Lunge',es:'Zancada en Smith',it:'Affondi al multipower',cat:'Beine',typ:'Maschine'},
+  {de:'LH Hack Squat',en:'Barbell Hack Squat',es:'Hack squat con barra',it:'Hack squat con bilanciere',cat:'Beine',typ:'Langhantel'},
+  {de:'LH Zercher Squat',en:'Zercher Squat',es:'Sentadilla Zercher',it:'Squat Zercher',cat:'Beine',typ:'Langhantel'},
+  // ── PLATE LOADED – RÜCKEN ────────────────────────────────
+  {de:'Chest Supported Row Plate Loaded',en:'Plate Loaded Chest Supported Row',es:'Remo en banco plate loaded',it:'Rematore su banco plate loaded',cat:'Rücken',typ:'Maschine'},
+  {de:'Plate Loaded Incline Row',en:'Plate Loaded Incline Row',es:'Remo inclinado plate loaded',it:'Rematore inclinato plate loaded',cat:'Rücken',typ:'Maschine'},
+  {de:'Plate Loaded High Row',en:'Plate Loaded High Row',es:'Remo alto plate loaded',it:'High row plate loaded',cat:'Rücken',typ:'Maschine'},
+  {de:'LH Rudern Untergriff',en:'Barbell Underhand Row',es:'Remo supino con barra',it:'Rematore supino con bilanciere',cat:'Rücken',typ:'Langhantel'},
+  {de:'Meadows Row (KH)',en:'Meadows Row',es:'Meadows row',it:'Meadows row',cat:'Rücken',typ:'Kurzhantel'},
+  {de:'Kabel Rudern stehend',en:'Standing Cable Row',es:'Remo de pie cable',it:'Rematore in piedi al cavo',cat:'Rücken',typ:'Kabel'},
+  // ── KABEL – BIZEPS ──────────────────────────────────────
+  {de:'Bizepscurl Stange (Kabel)',en:'Cable Straight Bar Curl',es:'Curl barra recta cable',it:'Curl bilanciere al cavo',cat:'Bizeps',typ:'Kabel'},
+  {de:'EZ-Stangen Curl (Kabel)',en:'Cable EZ Bar Curl',es:'Curl EZ cable',it:'Curl EZ al cavo',cat:'Bizeps',typ:'Kabel'},
+  {de:'Kabelcurl Schrägbank',en:'Cable Incline Curl',es:'Curl inclinado cable',it:'Curl su panca inclinata cavo',cat:'Bizeps',typ:'Kabel'},
+  {de:'Cross Body Curl (Kabel)',en:'Cable Cross Body Curl',es:'Curl cruzado cable',it:'Curl incrociato al cavo',cat:'Bizeps',typ:'Kabel'},
+  {de:'LH EZ-Stangen Curl',en:'EZ Bar Curl',es:'Curl barra EZ',it:'Curl bilanciere EZ',cat:'Bizeps',typ:'Langhantel'},
+  {de:'LH Reverse Curl',en:'Barbell Reverse Curl',es:'Curl inverso barra',it:'Curl inverso bilanciere',cat:'Bizeps',typ:'Langhantel'},
+  // ── KABEL – TRIZEPS ──────────────────────────────────────
+  {de:'Overhead Extension Stange (Kabel)',en:'Cable Overhead Bar Extension',es:'Extensión overhead barra cable',it:'Estensione overhead barra cavo',cat:'Trizeps',typ:'Kabel'},
+  {de:'Trizeps Kickback (Kabel)',en:'Cable Tricep Kickback',es:'Kickback tríceps cable',it:'Kickback tricipite cavo',cat:'Trizeps',typ:'Kabel'},
+  {de:'LH French Press',en:'Barbell French Press',es:'Press francés barra',it:'French press bilanciere',cat:'Trizeps',typ:'Langhantel'},
+  {de:'Close Grip Bankdrücken (LH)',en:'Close Grip Bench Press',es:'Press banca cerrado',it:'Panca stretta bilanciere',cat:'Trizeps',typ:'Langhantel'},
+  // ── SCHULTER – ERGÄNZUNGEN ───────────────────────────────
+  {de:'Kabel Pullapart (Schulter)',en:'Cable Rear Delt Pull-Apart',es:'Separación posterior cable',it:'Tirata posteriore cavo',cat:'Schulter',typ:'Kabel'},
+  {de:'LH Military Press',en:'Military Press',es:'Press militar',it:'Military press',cat:'Schulter',typ:'Langhantel'},
+  {de:'KH Cuban Press',en:'Dumbbell Cuban Press',es:'Cuban press mancuerna',it:'Cuban press manubri',cat:'Schulter',typ:'Kurzhantel'},
+  // ── BRUST – ERGÄNZUNGEN ──────────────────────────────────
+  {de:'Kabel Decline Flyes',en:'Cable Decline Flyes',es:'Aperturas decline cable',it:'Croci decline cavo',cat:'Brust',typ:'Kabel'},
+  {de:'Plate Loaded Butterfly',en:'Plate Loaded Pec Deck',es:'Pec deck plate loaded',it:'Pec deck plate loaded',cat:'Brust',typ:'Maschine'},
+  // ── CORE – ERGÄNZUNGEN ───────────────────────────────────
+  {de:'GHD Sit-Up',en:'GHD Sit-Up',es:'GHD abdominales',it:'GHD sit-up',cat:'Core',typ:'Maschine'},
+  {de:'Hängendes Beinheben',en:'Hanging Leg Raise',es:'Elevación de piernas colgado',it:'Sollevamento gambe appeso',cat:'Core',typ:'Kurzhantel'},
+  {de:'Ab Wheel Rollout',en:'Ab Wheel Rollout',es:'Rueda abdominal',it:'Ruota addominale',cat:'Core',typ:'Kurzhantel'},
+  // ── CARDIO – ERGÄNZUNGEN ─────────────────────────────────
+  {de:'Kettlebell Swing',en:'Kettlebell Swing',es:'Swing con kettlebell',it:'Swing con kettlebell',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Sled Push',en:'Sled Push',es:'Empuje de trineo',it:'Spinta della slitta',cat:'Cardio',typ:'Cardio',cardio:true},
+  {de:'Sled Pull',en:'Sled Pull',es:'Tirón de trineo',it:'Tiro della slitta',cat:'Cardio',typ:'Cardio',cardio:true},
 ];
 function getAllDB(){return [...DB,...(S.gj('customdb')||[])]}
 
@@ -2631,6 +2676,24 @@ function getAudioCtx(){
 document.addEventListener('touchstart',unlockAudio,{once:false,passive:true});
 document.addEventListener('click',unlockAudio,{once:false,passive:true});
 
+// iOS PWA: resume AudioContext + check if pause timer expired in background
+document.addEventListener('visibilitychange',()=>{
+  if(!document.hidden){
+    if(_audioCtx&&_audioCtx.state==='suspended'){_audioCtx.resume().catch(()=>{});}
+    if(typeof _timerEndTs!=='undefined'&&_timerEndTs&&Date.now()>=_timerEndTs){
+      setTimeout(()=>{
+        unlockAudio();
+        const ac=getAudioCtx();
+        if(ac&&ac.state==='suspended'){ac.resume().then(()=>_timerFire()).catch(()=>_timerFire());}
+        else _timerFire();
+      },200);
+    }
+  }
+});
+window.addEventListener('pageshow',()=>{
+  if(typeof _audioCtx!=='undefined'&&_audioCtx&&_audioCtx.state==='suspended'){_audioCtx.resume().catch(()=>{});}
+});
+
 function gentleFlash(){
   // Sanfter weißer Schimmer + Vibration
   if(navigator.vibrate){navigator.vibrate([80]);}
@@ -2932,7 +2995,9 @@ function buildWorkoutSummary(pid,did,week){
 
   const startStr=S.g(K.wstart(pid,did,week));
   const endStr=S.g(K.wend(pid,did,week));
-  const dur=startStr&&endStr?Math.floor((new Date(endStr)-new Date(startStr))/1000):0;
+  const _pauseData=S.gj(K.wpause(pid,did,week));
+  const _pauseDur=(_pauseData&&_pauseData.pausedAt&&!_woRunning)?Math.max(0,Math.floor((Date.now()-_pauseData.pausedAt)/1000)):0;
+  const dur=startStr&&endStr?Math.max(0,Math.floor((new Date(endStr)-new Date(startStr))/1000)-_pauseDur):0;
   const h=Math.floor(dur/3600),m=Math.floor((dur%3600)/60),s=dur%60;
   const durStr=h>0?h+'h '+m+'min ':m+' Min '+s+' Sek';
 
@@ -3176,6 +3241,7 @@ function buildWorkoutSummary(pid,did,week){
 
 function stopWorkoutTimer(pid,did,week){
   S.s(K.wend(pid,did,week),new Date().toISOString());
+  S.d(K.wpause(pid,did,week)); // clear pause state on stop
   clearInterval(_woInterval);_woInterval=null;_woRunning=false;
   document.removeEventListener('visibilitychange',_woVisHandler);
   window.removeEventListener('pageshow',_woPageShow);
@@ -3239,7 +3305,7 @@ function saveWorkoutHistory(pid,did,week){
 }
 
 function resetWorkoutTimer(pid,did,week){
-  S.d(K.wstart(pid,did,week));S.d(K.wend(pid,did,week));
+  S.d(K.wstart(pid,did,week));S.d(K.wend(pid,did,week));S.d(K.wpause(pid,did,week));
   clearInterval(_woInterval);_woInterval=null;_woRunning=false;
   const el=document.getElementById('wonum-'+did);if(el)el.textContent='00:00';
   const sl=document.getElementById('wosub-'+did);if(sl)sl.textContent='Noch nicht gestartet';
@@ -3659,9 +3725,9 @@ function _reorderExercises(pid,did,fromIdx,toIdx){
   const TEMP='_tmp_reorder_';
   const dataKeys=(ei)=>{
     const keys=[];
-    for(let w=1;w<=20;w++){
+    for(let w=1;w<=52;w++){
       for(let si=0;si<20;si++){
-        ['kg','wdh','notiz'].forEach(f=>keys.push({from:K.set(pid,did,w,ei,si,f),type:'set',w,si,f}));
+        ['kg','wdh','notiz','kgL','kgR','wdhL','wdhR'].forEach(f=>keys.push({from:K.set(pid,did,w,ei,si,f),type:'set',w,si,f}));
         for(let ai=0;ai<3;ai++){['kg','wdh'].forEach(f=>keys.push({from:K.aw(pid,did,w,ei,ai,f),type:'aw',w,ai,f}));}
       }
     }
@@ -3773,9 +3839,9 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       // Shift all storage keys from delEi+1 onwards down by 1
       for(let ei=delEi;ei<totalEx-1;ei++){
         // Move ei+1 → ei for all weeks and sets
-        for(let w=1;w<=20;w++){
+        for(let w=1;w<=52;w++){
           for(let si=0;si<20;si++){
-            ['kg','wdh','notiz'].forEach(f=>{
+            ['kg','wdh','notiz','kgL','kgR','wdhL','wdhR'].forEach(f=>{
               const fromKey=K.set(pid,did,w,ei+1,si,f);
               const toKey=K.set(pid,did,w,ei,si,f);
               const v=S.g(fromKey);
@@ -3811,13 +3877,14 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       }
       // Clear last index
       const lastEi=totalEx-1;
-      for(let w=1;w<=20;w++){
+      for(let w=1;w<=52;w++){
         for(let si=0;si<20;si++){
-          ['kg','wdh','notiz'].forEach(f=>S.d(K.set(pid,did,w,lastEi,si,f)));
+          ['kg','wdh','notiz','kgL','kgR','wdhL','wdhR'].forEach(f=>S.d(K.set(pid,did,w,lastEi,si,f)));
           for(let ai=0;ai<3;ai++){['kg','wdh'].forEach(f=>S.d(K.aw(pid,did,w,lastEi,ai,f)));}
         }
       }
       S.d(K.csets(pid,did,lastEi));S.d(K.swap(pid,did,lastEi));S.d(KrrEx(pid,did,lastEi));
+      for(let si2=0;si2<20;si2++)S.d(KsetType(pid,did,lastEi,si2));
     }
 
     // Use original index first (most reliable)
@@ -3857,13 +3924,14 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
   const vwv=document.createElement('span');vwv.className='vwi';vwv.style.cssText='background:transparent;border:none;color:var(--muted);font-size:12px;padding:0';
   if(week>1){
     const _cnt=getSetCount(pid,did,ei,ex.sets||3);
+    const _isUniVw=S.g(K.uni(pid,did,ei))==='1';
     let _bKg=0,_bWdh=0;
     for(let _si=0;_si<_cnt+5;_si++){
-      const _kg=parseFloat(S.g(K.set(pid,did,week-1,ei,_si,'kg')))||0;
-      const _wd=parseInt(S.g(K.set(pid,did,week-1,ei,_si,'wdh')))||0;
+      const _kg=parseFloat(S.g(K.set(pid,did,week-1,ei,_si,_isUniVw?'kgL':'kg')))||0;
+      const _wd=parseInt(S.g(K.set(pid,did,week-1,ei,_si,_isUniVw?'wdhL':'wdh')))||0;
       if(_kg>0&&_wd>0&&_kg>=_bKg){_bKg=_kg;_bWdh=_wd;}
     }
-    vwv.textContent=_bKg>0?_bKg+'kg x '+_bWdh:'–';
+    vwv.textContent=_bKg>0?(_isUniVw?'L: ':'')+_bKg+'kg x '+_bWdh:'–';
   } else { vwv.textContent='–'; }
   vwr.appendChild(vwl);vwr.appendChild(vwv);body.appendChild(vwr);
 
@@ -4877,6 +4945,51 @@ function renderVolChart(){
   data.forEach((d,i)=>{const x=pad.l+(i/(Math.max(data.length-1,1)))*cW-bW/2,hh=(d.vol/maxV)*cH,y=pad.t+cH-hh;const g=ctx.createLinearGradient(0,y,0,y+hh);g.addColorStop(0,'rgba(37,99,235,.85)');g.addColorStop(1,'rgba(37,99,235,.2)');ctx.fillStyle=g;ctx.beginPath();ctx.rect(x,y,bW,hh);ctx.fill();ctx.fillStyle='#fff';ctx.font='bold 8px DM Sans';ctx.textAlign='center';ctx.fillText(d.vol+'t',x+bW/2,y-3);ctx.fillStyle='#555';ctx.font='9px DM Sans';ctx.fillText(`W${d.w}`,x+bW/2,128);});
 }
 
+
+// ══ DAY EXPORT / IMPORT ═══════════════════════════════════
+function exportDay(day){
+  const exportObj={
+    version:1,
+    dayName:day.name||'Tag',
+    dayIcon:day.icon||'💪',
+    exercises:(day.exercises||[]).map(ex=>({
+      name:ex.name,cat:ex.cat,typ:ex.typ,
+      sets:ex.sets||3,type:ex.type||'rir-mv',
+      warmup:ex.warmup||false
+    }))
+  };
+  const json=JSON.stringify(exportObj,null,2);
+  const blob=new Blob([json],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=(day.name||'Tag').replace(/[^a-zA-Z0-9äöüÄÖÜß ]/g,'_')+'.gainlogday';
+  document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1000);
+  toast('⬇️ '+day.name+' exportiert!');
+}
+
+function importDayFile(day,onDone){
+  const inp=document.createElement('input');
+  inp.type='file';inp.accept='.gainlogday';
+  inp.addEventListener('change',()=>{
+    const file=inp.files[0];if(!file)return;
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const obj=JSON.parse(e.target.result);
+        if(!obj.exercises){toast('❌ Ungültige .gainlogday Datei');return;}
+        if(!confirm('Übungen für "'+day.name+'" mit "'+obj.dayName+'" ersetzen? Bestehende Reihenfolge wird überschrieben.'))return;
+        day.exercises=obj.exercises.map(ex=>({...ex}));
+        onDone();
+        toast('✅ '+obj.dayName+' geladen!');
+      }catch(err){toast('❌ Fehler beim Import');}
+    };
+    reader.readAsText(file);
+  });
+  inp.click();
+}
+
 // ══ PLAN BUILDER ══════════════════════════════════════════
 let _editPlan=null;
 const DAY_ICONS=['💪','📈','🔥','🦵','⚡','🎯','💙','🧠'];
@@ -4908,7 +5021,14 @@ function renderPBDays(){
     // Delete day
     const del=document.createElement('div');del.className='delpausebtn';del.textContent='✕ Tag löschen';
     del.addEventListener('click',()=>{_editPlan.days.splice(di,1);renderPBDays();toast('🗑️ Tag gelöscht');});
-    dhdr.appendChild(dicoEl);dhdr.appendChild(dname);dhdr.appendChild(del);db.appendChild(dhdr);
+    // Day export/import buttons
+    const dayExpBtn=document.createElement('div');dayExpBtn.style.cssText='font-size:11px;cursor:pointer;padding:3px 7px;border:1px solid #333;border-radius:6px;color:#555;background:#111;white-space:nowrap';
+    dayExpBtn.textContent='⬇️';dayExpBtn.title='Tag exportieren';
+    dayExpBtn.addEventListener('click',()=>exportDay(day));
+    const dayImpBtn=document.createElement('div');dayImpBtn.style.cssText='font-size:11px;cursor:pointer;padding:3px 7px;border:1px solid #333;border-radius:6px;color:#555;background:#111;white-space:nowrap';
+    dayImpBtn.textContent='⬆️';dayImpBtn.title='Tag importieren';
+    dayImpBtn.addEventListener('click',()=>importDayFile(day,()=>renderPBDays()));
+    dhdr.appendChild(dicoEl);dhdr.appendChild(dname);dhdr.appendChild(dayExpBtn);dhdr.appendChild(dayImpBtn);dhdr.appendChild(del);db.appendChild(dhdr);
 
     const dbody=document.createElement('div');dbody.className='dbody';
     // Pause settings
@@ -5381,7 +5501,7 @@ function importPlan(file){
         localStorage.setItem('gl_'+newKey,v);
       });
 
-      renderPlanList();
+      renderPlanList();renderImportBtn();renderPresetSection();
       toast('✅ '+newPlan.name+' importiert!');
     }catch(err){
       toast('❌ Fehler beim Import');
@@ -6207,7 +6327,9 @@ document.getElementById('tr-stop').addEventListener('click',()=>{clearInterval(_
 function adjustTimer(delta){
   if(!_ti)return; // only when timer is running
   _tl=Math.max(1,_tl+delta);
-  _tt=Math.max(_tt,_tl); // adjust total if adding
+  _tt=Math.max(_tt,_tl);
+  // Sync _timerEndTs so interval doesn't overwrite the change
+  if(_timerEndTs) _timerEndTs=Date.now()+(_tl*1000);
   updateTimerUI();
 }
 document.getElementById('tr-minus').addEventListener('click',()=>adjustTimer(-10));
