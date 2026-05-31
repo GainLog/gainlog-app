@@ -2083,18 +2083,16 @@ function buildWeekView(){
   dayImpLogBtn.style.cssText='background:transparent;border:none;color:var(--muted2);font-size:10px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:0';
   dayImpLogBtn.innerHTML='⬆️ tag';
   dayImpLogBtn.title='Tag importieren (.gainlogday)';
-  dayImpLogBtn.addEventListener('click',e=>{e.stopPropagation();importDayFile(day,()=>{
-    const plans=getPlans();
-    const p=plans.find(pl=>pl.id===plan.id);
-    if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
-    savePlans(plans);renderLog();
-  });});
-  dayImpLogBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();importDayFile(day,()=>{
-    const plans=getPlans();
-    const p=plans.find(pl=>pl.id===plan.id);
-    if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
-    savePlans(plans);renderLog();
-  });},{passive:false});
+  const _doImpLog=()=>{
+    importDayFile(day,()=>{
+      const plans=getPlans();
+      const p=plans.find(pl=>pl.id===plan.id);
+      if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
+      savePlans(plans);renderLog();
+    });
+  };
+  dayImpLogBtn.addEventListener('click',e=>{e.stopPropagation();_doImpLog();});
+  dayImpLogBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();_doImpLog();},{passive:false});
 
   settBtn.appendChild(dayExpLogBtn);
   settBtn.appendChild(dayImpLogBtn);
@@ -6443,6 +6441,10 @@ if(checkLicenseOnStart()){
   renderLog();
   updateDash();
 }
+
+// Wire permanent day import input
+const _glDayInp=document.getElementById('gl-day-import-input');
+if(_glDayInp)_glDayInp.addEventListener('change',()=>{if(typeof _dayImportCb==='function'&&_glDayInp.files[0]){_dayImportCb(_glDayInp.files[0]);_dayImportCb=null;}});
 </script>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
