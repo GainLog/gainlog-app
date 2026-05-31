@@ -2071,31 +2071,65 @@ function buildWeekView(){
   exportBtn.addEventListener('click',e=>{e.stopPropagation();exportPlanAsText(plan);});
   exportBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();exportPlanAsText(plan);},{passive:false});
 
-  // Day export/import buttons in log
+  // Day export button (larger)
   const dayExpLogBtn=document.createElement('button');
-  dayExpLogBtn.style.cssText='background:transparent;border:none;color:var(--muted2);font-size:10px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:0';
-  dayExpLogBtn.innerHTML='⬇️ tag';
-  dayExpLogBtn.title='Tag exportieren (.gainlogday)';
+  dayExpLogBtn.style.cssText='background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#aaa;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;padding:6px 10px;min-height:32px';
+  dayExpLogBtn.innerHTML='⬇️ Export';
   dayExpLogBtn.addEventListener('click',e=>{e.stopPropagation();exportDay(day);});
   dayExpLogBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();exportDay(day);},{passive:false});
 
-  const dayImpLogBtn=document.createElement('button');
-  dayImpLogBtn.style.cssText='background:transparent;border:none;color:var(--muted2);font-size:10px;cursor:pointer;display:flex;align-items:center;gap:3px;padding:0';
-  dayImpLogBtn.innerHTML='⬆️ tag';
-  dayImpLogBtn.title='Tag importieren (.gainlogday)';
-  const _doImpLog=()=>{
-    importDayFile(day,()=>{
-      const plans=getPlans();
-      const p=plans.find(pl=>pl.id===plan.id);
-      if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
-      savePlans(plans);renderLog();
-    });
-  };
-  dayImpLogBtn.addEventListener('click',e=>{e.stopPropagation();_doImpLog();});
-  dayImpLogBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();_doImpLog();},{passive:false});
+  // Day import: use label over hidden input for iOS compatibility
+  const dayImpWrap=document.createElement('div');
+  dayImpWrap.style.cssText='position:relative;display:flex;';
+  const dayImpLabel=document.createElement('label');
+  dayImpLabel.htmlFor='gl-day-import-input';
+  dayImpLabel.style.cssText='background:#1a1a1a;border:1px solid #333;border-radius:8px;color:#aaa;font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:4px;padding:6px 10px;min-height:32px;user-select:none;-webkit-user-select:none';
+  dayImpLabel.innerHTML='⬆️ Import';
+  dayImpLabel.addEventListener('mousedown',()=>{
+    // Set callback before file picker opens
+    _dayImportCb=(file)=>{
+      if(!file)return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        try{
+          const obj=JSON.parse(ev.target.result);
+          if(!obj.exercises){toast('❌ Ungültige .gainlogday Datei');return;}
+          if(!confirm('Übungen für "'+day.name+'" mit "'+obj.dayName+'" ersetzen?'))return;
+          day.exercises=obj.exercises.map(ex=>({...ex}));
+          const plans=getPlans();
+          const p=plans.find(pl=>pl.id===plan.id);
+          if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
+          savePlans(plans);renderLog();
+          toast('✅ '+obj.dayName+' geladen!');
+        }catch(err){toast('❌ Fehler beim Import');}
+      };
+      reader.readAsText(file);
+    };
+  });
+  dayImpLabel.addEventListener('touchstart',()=>{
+    _dayImportCb=(file)=>{
+      if(!file)return;
+      const reader=new FileReader();
+      reader.onload=ev=>{
+        try{
+          const obj=JSON.parse(ev.target.result);
+          if(!obj.exercises){toast('❌ Ungültige .gainlogday Datei');return;}
+          if(!confirm('Übungen für "'+day.name+'" mit "'+obj.dayName+'" ersetzen?'))return;
+          day.exercises=obj.exercises.map(ex=>({...ex}));
+          const plans=getPlans();
+          const p=plans.find(pl=>pl.id===plan.id);
+          if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
+          savePlans(plans);renderLog();
+          toast('✅ '+obj.dayName+' geladen!');
+        }catch(err){toast('❌ Fehler beim Import');}
+      };
+      reader.readAsText(file);
+    };
+  },{passive:true});
+  dayImpWrap.appendChild(dayImpLabel);
 
   settBtn.appendChild(dayExpLogBtn);
-  settBtn.appendChild(dayImpLogBtn);
+  settBtn.appendChild(dayImpWrap);
   settBtn.appendChild(exportBtn);
   settBtn.appendChild(btn);
   wrap.appendChild(settBtn);
