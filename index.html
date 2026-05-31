@@ -2094,18 +2094,22 @@ function buildWeekView(){
     const reader=new FileReader();
     reader.onload=ev=>{
       try{
-        const obj=JSON.parse(ev.target.result);
-        if(!obj.exercises){toast('❌ Ungültige .gainlogday Datei');return;}
-        if(!confirm('Übungen für "'+day.name+'" mit "'+obj.dayName+'" ersetzen?'))return;
+        // Strip BOM and whitespace (common iOS encoding issue)
+        let raw=ev.target.result||'';
+        if(raw.charCodeAt(0)===0xFEFF)raw=raw.slice(1);
+        raw=raw.trim();
+        const obj=JSON.parse(raw);
+        if(!obj.exercises||!Array.isArray(obj.exercises)){toast('❌ Ungültige Datei: exercises fehlt');return;}
+        if(!confirm('Übungen für "'+day.name+'" mit "'+(obj.dayName||'Import')+'" ersetzen?'))return;
         day.exercises=obj.exercises.map(ex=>({...ex}));
         const plans=getPlans();
         const p=plans.find(pl=>pl.id===plan.id);
         if(p){const d=p.days.find(dd=>dd.id===day.id);if(d)d.exercises=day.exercises;}
         savePlans(plans);renderLog();
-        toast('✅ '+obj.dayName+' geladen!');
-      }catch(err){toast('❌ Fehler beim Import');}
+        toast('✅ '+(obj.dayName||'Tag')+' geladen!');
+      }catch(err){toast('❌ Parse-Fehler: '+err.message.slice(0,40));}
     };
-    reader.readAsText(file);
+    reader.readAsText(file,'UTF-8');
     dayImpInp.value='';
   });
   dayImpWrap.appendChild(dayImpTxt);
