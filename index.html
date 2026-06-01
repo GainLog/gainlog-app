@@ -48,7 +48,8 @@ body.light .hdr{background:rgba(244,244,245,.95)}
 .week-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .wbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .wbtn:active{transform:scale(.9)}
-.wlbl{font-size:14px;font-weight:700;flex:1;text-align:center}
+.wlbl{font-size:14px;font-weight:700;flex:1;text-align:center;cursor:pointer;padding:6px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--surface2);transition:all .2s;user-select:none}
+.wlbl:active{background:var(--blue-dim);border-color:var(--blue);color:var(--blue2)}
 .stabs{display:none}
 .stab{display:none}
 
@@ -1122,6 +1123,20 @@ select{background:var(--surface2);border:1px solid var(--border);border-radius:v
         Made with 💪 für ernsthaftes Training
       </div>
 
+    </div>
+  </div>
+</div>
+
+<!-- WEEK PICKER MODAL -->
+<div class="mov" id="wpickMov">
+  <div class="msheet">
+    <div class="mhdr">
+      <div class="mtit">WOCHE WÄHLEN</div>
+      <div class="msub" id="wpick-sub">Wochen mit gespeicherten Daten sind grün markiert</div>
+      <button class="mclose" onclick="document.getElementById('wpickMov').classList.remove('on')">✕</button>
+    </div>
+    <div style="padding:14px 15px 30px;overflow-y:auto">
+      <div id="wpick-grid" style="display:grid;grid-template-columns:repeat(6,1fr);gap:7px"></div>
     </div>
   </div>
 </div>
@@ -2846,7 +2861,7 @@ function updateTimerUI(){
 let currentPage='log';
 let currentWeek=parseInt(S.g('currentWeek'))||1;
 let currentDayId=null;
-const MAX_WEEKS=16;
+const MAX_WEEKS=52;
 
 // ══ CALORIE CALC ══════════════════════════════════════════
 const PAUSE_FRAC={};// dynamic per day
@@ -3126,12 +3141,16 @@ function buildWorkoutSummary(pid,did,week){
     const nm=S.g(K.swap(pid,did,ei))||ex.name;
     if(exSets>0){
       let isPR=false;
-      for(let pw=1;pw<week;pw++){
-        for(let psi=0;psi<exSetCount+5;psi++){
-          const pkg=parseFloat(S.g(K.set(pid,did,pw,ei,psi,'kg')))||0;
-          const pwdh=parseInt(S.g(K.set(pid,did,pw,ei,psi,'wdh')))||0;
-          if(pkg>0&&pwdh>0&&pkg*(1+pwdh/30)>=best1RM){isPR=false;break;}
+      if(best1RM>0){
+        let prevBest1RM=0;
+        for(let pw=1;pw<week;pw++){
+          for(let psi=0;psi<exSetCount+5;psi++){
+            const pkg=parseFloat(S.g(K.set(pid,did,pw,ei,psi,'kg')))||0;
+            const pwdh=parseInt(S.g(K.set(pid,did,pw,ei,psi,'wdh')))||0;
+            if(pkg>0&&pwdh>0){const rm=pkg*(1+pwdh/30);if(rm>prevBest1RM)prevBest1RM=rm;}
+          }
         }
+        isPR=best1RM>prevBest1RM;
       }
       // Get pause for this exercise (custom or day default)
       const exPauseKey='epause_'+pid+'_'+did+'_'+ei;
@@ -6546,7 +6565,30 @@ addSiTouch('p-import',importData);
 addSiTouch('p-reset',confirmReset);
 
 // ══ NAV EVENTS ════════════════════════════════════════════
+function openWeekPicker(){
+  const plan=getActivePlan();
+  const grid=document.getElementById('wpick-grid');
+  if(!grid)return;
+  grid.innerHTML='';
+  for(let w=1;w<=MAX_WEEKS;w++){
+    const hasSaved=plan&&plan.days.some(d=>S.g(K.saved(plan.id,d.id,w)));
+    const isCur=w===currentWeek;
+    const btn=document.createElement('button');
+    btn.textContent='W'+w;
+    btn.style.cssText='padding:10px 0;border-radius:10px;border:'+(isCur?'2px solid var(--blue)':'1px solid var(--border)')+';background:'+(isCur?'var(--blue)':hasSaved?'rgba(34,197,94,.15)':'var(--surface2)')+';color:'+(isCur?'#fff':hasSaved?'var(--green)':'var(--muted)')+';font-family:\'Bebas Neue\',sans-serif;font-size:14px;cursor:pointer;transition:all .15s';
+    btn.addEventListener('click',()=>{
+      currentWeek=w;
+      S.s('currentWeek',currentWeek);
+      document.getElementById('wlbl').textContent='Woche '+currentWeek;
+      document.getElementById('wpickMov').classList.remove('on');
+      renderLog();
+    });
+    grid.appendChild(btn);
+  }
+  document.getElementById('wpickMov').classList.add('on');
+}
 document.querySelectorAll('.ni').forEach(ni=>ni.addEventListener('click',()=>showPage(ni.getAttribute('data-p'))));
+document.getElementById('wlbl').addEventListener('click',openWeekPicker);
 document.getElementById('wbtn-prev').addEventListener('click',()=>{if(currentWeek>1){currentWeek--;S.s('currentWeek',currentWeek);document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);}});
 document.getElementById('wbtn-next').addEventListener('click',()=>{if(currentWeek<MAX_WEEKS){currentWeek++;S.s('currentWeek',currentWeek);document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);}});
 document.getElementById('tr-skip').addEventListener('click',()=>{
