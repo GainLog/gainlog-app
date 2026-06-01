@@ -4301,7 +4301,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
   }
   buildSets();
   card.appendChild(body);
-  setTimeout(()=>checkPR(pid,did,ei,day),0);
+  setTimeout(()=>checkPR(pid,did,ei,day,true),0);
   return card;
 }
 
@@ -4328,7 +4328,7 @@ function getSetCount(pid,did,ei,def){
   const v=S.g(K.csets(pid,did,ei));return v?Math.max(1,parseInt(v)||def):def;
 }
 
-function checkPR(pid,did,ei,day){
+function checkPR(pid,did,ei,day,silent=false){
   const bdg=document.getElementById(`pr-${did}-${ei}`);if(!bdg)return;
   const cnt=getSetCount(pid,did,ei,3);
   // PR = höchstes Gewicht (kg), nicht 1RM
@@ -4349,8 +4349,8 @@ function checkPR(pid,did,ei,day){
   }
   const isPR=currBestKg>prevBestKg;
   bdg.classList.toggle('on',isPR);
-  // Toast only — persistent save happens at workout save
-  if(isPR&&bestWdh>0){
+  // Toast nur bei aktiver Eingabe (silent=false), nie beim App-Start/renderLog
+  if(isPR&&bestWdh>0&&!silent){
     const prs=getPRs();
     const plans=getPlans();
     const pl=plans.find(p=>p.id===pid);
