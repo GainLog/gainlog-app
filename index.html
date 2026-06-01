@@ -3086,7 +3086,7 @@ function buildWorkoutSummary(pid,did,week){
 
   allExercises.forEach(({ex,ei})=>{
     // Read up to 20 sets and collect only filled ones
-    let exVol=0,exSets=0,best1RM=0,bestKgEx=0;
+    let exVol=0,exSets=0,best1RM=0,bestKgEx=0,bestWdhEx=0;
     let setDetails=[];
     const exSetCount=getSetCount(pid,did,ei,ex.sets||3);
     for(let si=0;si<Math.max(exSetCount+5,10);si++){
@@ -3135,7 +3135,8 @@ function buildWorkoutSummary(pid,did,week){
         const volMult=_uniEx?2:1;
         exVol+=kgUsed*wdhUsed*volMult;exSets++;totalSets++;totalVol+=kgUsed*wdhUsed*volMult;
         const rm=kgUsed*(1+wdhUsed/30);if(rm>best1RM)best1RM=rm;
-        if(kgUsed>bestKgEx)bestKgEx=kgUsed;
+        if(kgUsed>bestKgEx){bestKgEx=kgUsed;bestWdhEx=wdhUsed;}
+        else if(kgUsed===bestKgEx&&wdhUsed>bestWdhEx){bestWdhEx=wdhUsed;}
         setDetails.push({si:si+1,kg,wdh,stype,note});
       }
     }
@@ -3143,15 +3144,18 @@ function buildWorkoutSummary(pid,did,week){
     if(exSets>0){
       let isPR=false;
       if(bestKgEx>0){
-        let prevBestKg=0;
+        let prevBestKg=0,prevBestWdh=0;
         for(let pw=1;pw<week;pw++){
           for(let psi=0;psi<exSetCount+5;psi++){
             const pkg=parseFloat(S.g(K.set(pid,did,pw,ei,psi,'kg')))||0;
             const pwdh=parseInt(S.g(K.set(pid,did,pw,ei,psi,'wdh')))||0;
-            if(pkg>0&&pwdh>0&&pkg>prevBestKg)prevBestKg=pkg;
+            if(pkg>0&&pwdh>0){
+              if(pkg>prevBestKg){prevBestKg=pkg;prevBestWdh=pwdh;}
+              else if(pkg===prevBestKg&&pwdh>prevBestWdh){prevBestWdh=pwdh;}
+            }
           }
         }
-        isPR=bestKgEx>prevBestKg;
+        isPR=bestKgEx>prevBestKg||(bestKgEx===prevBestKg&&bestWdhEx>prevBestWdh);
       }
       // Get pause for this exercise (custom or day default)
       const exPauseKey='epause_'+pid+'_'+did+'_'+ei;
@@ -4339,15 +4343,18 @@ function checkPR(pid,did,ei,day,silent=false){
     if(kg>0&&wdh>0&&kg>currBestKg){currBestKg=kg;bestWdh=wdh;}
   }
   if(currBestKg===0){bdg.classList.remove('on');return;}
-  let prevBestKg=0;
+  let prevBestKg=0,prevBestWdh=0;
   for(let w=1;w<currentWeek;w++){
     for(let si=0;si<cnt+5;si++){
       const kg=parseFloat(S.g(K.set(pid,did,w,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,w,ei,si,'wdh')))||0;
-      if(kg>0&&wdh>0&&kg>prevBestKg)prevBestKg=kg;
+      if(kg>0&&wdh>0){
+        if(kg>prevBestKg){prevBestKg=kg;prevBestWdh=wdh;}
+        else if(kg===prevBestKg&&wdh>prevBestWdh){prevBestWdh=wdh;}
+      }
     }
   }
-  const isPR=currBestKg>prevBestKg;
+  const isPR=currBestKg>prevBestKg||(currBestKg===prevBestKg&&bestWdh>prevBestWdh);
   bdg.classList.toggle('on',isPR);
   // Toast nur bei aktiver Eingabe (silent=false), nie beim App-Start/renderLog
   if(isPR&&bestWdh>0&&!silent){
@@ -5672,7 +5679,7 @@ function savePRFromWorkout(exName,kg,wdh){
   const prs=getPRs();
   const rm=parseFloat((kg*(1+wdh/30)).toFixed(1));
   const stored=prs[exName];
-  if(!stored||kg>stored.kg){
+  if(!stored||kg>stored.kg||(kg===stored.kg&&wdh>stored.wdh)){
     prs[exName]={kg,wdh,rm,date:new Date().toISOString().split('T')[0]};
     savePRs(prs);
     return true;
@@ -5694,18 +5701,24 @@ function saveAllWorkoutPRs(pid,did,week){
     for(let si=0;si<cnt+5;si++){
       const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
-      if(kg>0&&wdh>0&&kg>currBestKg){currBestKg=kg;bestWdh=wdh;}
+      if(kg>0&&wdh>0){
+        if(kg>currBestKg){currBestKg=kg;bestWdh=wdh;}
+        else if(kg===currBestKg&&wdh>bestWdh){bestWdh=wdh;}
+      }
     }
     if(currBestKg===0)return;
-    let prevBestKg=0;
+    let prevBestKg=0,prevBestWdh=0;
     for(let w=1;w<week;w++){
       for(let si=0;si<cnt+5;si++){
         const kg=parseFloat(S.g(K.set(pid,did,w,ei,si,'kg')))||0;
         const wdh=parseInt(S.g(K.set(pid,did,w,ei,si,'wdh')))||0;
-        if(kg>0&&wdh>0&&kg>prevBestKg)prevBestKg=kg;
+        if(kg>0&&wdh>0){
+          if(kg>prevBestKg){prevBestKg=kg;prevBestWdh=wdh;}
+          else if(kg===prevBestKg&&wdh>prevBestWdh){prevBestWdh=wdh;}
+        }
       }
     }
-    if(currBestKg>prevBestKg){
+    if(currBestKg>prevBestKg||(currBestKg===prevBestKg&&bestWdh>prevBestWdh)){
       const exName=S.g(K.swap(pid,did,ei))||ex.name;
       savePRFromWorkout(exName,currBestKg,bestWdh);
     }
