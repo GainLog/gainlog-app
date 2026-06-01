@@ -3086,7 +3086,7 @@ function buildWorkoutSummary(pid,did,week){
 
   allExercises.forEach(({ex,ei})=>{
     // Read up to 20 sets and collect only filled ones
-    let exVol=0,exSets=0,best1RM=0;
+    let exVol=0,exSets=0,best1RM=0,bestKgEx=0;
     let setDetails=[];
     const exSetCount=getSetCount(pid,did,ei,ex.sets||3);
     for(let si=0;si<Math.max(exSetCount+5,10);si++){
@@ -3135,22 +3135,23 @@ function buildWorkoutSummary(pid,did,week){
         const volMult=_uniEx?2:1;
         exVol+=kgUsed*wdhUsed*volMult;exSets++;totalSets++;totalVol+=kgUsed*wdhUsed*volMult;
         const rm=kgUsed*(1+wdhUsed/30);if(rm>best1RM)best1RM=rm;
+        if(kgUsed>bestKgEx)bestKgEx=kgUsed;
         setDetails.push({si:si+1,kg,wdh,stype,note});
       }
     }
     const nm=S.g(K.swap(pid,did,ei))||ex.name;
     if(exSets>0){
       let isPR=false;
-      if(best1RM>0){
-        let prevBest1RM=0;
+      if(bestKgEx>0){
+        let prevBestKg=0;
         for(let pw=1;pw<week;pw++){
           for(let psi=0;psi<exSetCount+5;psi++){
             const pkg=parseFloat(S.g(K.set(pid,did,pw,ei,psi,'kg')))||0;
             const pwdh=parseInt(S.g(K.set(pid,did,pw,ei,psi,'wdh')))||0;
-            if(pkg>0&&pwdh>0){const rm=pkg*(1+pwdh/30);if(rm>prevBest1RM)prevBest1RM=rm;}
+            if(pkg>0&&pwdh>0&&pkg>prevBestKg)prevBestKg=pkg;
           }
         }
-        isPR=best1RM>prevBest1RM;
+        isPR=bestKgEx>prevBestKg;
       }
       // Get pause for this exercise (custom or day default)
       const exPauseKey='epause_'+pid+'_'+did+'_'+ei;
@@ -3322,6 +3323,7 @@ function stopWorkoutTimer(pid,did,week){
   setTimeout(()=>{
     saveWorkoutHistory(pid,did,week);
     buildWorkoutSummary(pid,did,week);
+    saveAllWorkoutPRs(pid,did,week);
   },400);
 }
 
@@ -3705,6 +3707,8 @@ function renderLog(){
     if(_woRunning||( S.g(K.wstart(pid,did,week))&&!S.g(K.wend(pid,did,week)) )){
       stopWorkoutTimer(pid,did,week);
     }
+    // Save PRs based on final entered values (not mid-typing snapshots)
+    saveAllWorkoutPRs(pid,did,week);
     const el=document.getElementById('savets-'+did);if(el)el.textContent='✅ '+s2;
     updateDash();toast(t('saved'));
   });
@@ -4327,37 +4331,35 @@ function getSetCount(pid,did,ei,def){
 function checkPR(pid,did,ei,day){
   const bdg=document.getElementById(`pr-${did}-${ei}`);if(!bdg)return;
   const cnt=getSetCount(pid,did,ei,3);
-  // PR requires BOTH kg AND wdh to be filled in current week
-  let curr1RM=0,prev1RM=0;
-  let bestKg=0,bestWdh=0;
+  // PR = höchstes Gewicht (kg), nicht 1RM
+  let currBestKg=0,bestWdh=0;
   for(let si=0;si<cnt+5;si++){
     const kg=parseFloat(S.g(K.set(pid,did,currentWeek,ei,si,'kg')))||0;
     const wdh=parseInt(S.g(K.set(pid,did,currentWeek,ei,si,'wdh')))||0;
-    if(kg>0&&wdh>0){const rm=kg*(1+wdh/30);if(rm>curr1RM){curr1RM=rm;bestKg=kg;bestWdh=wdh;}}
+    if(kg>0&&wdh>0&&kg>currBestKg){currBestKg=kg;bestWdh=wdh;}
   }
-  // Only check PR if current has both kg+wdh
-  if(curr1RM===0){bdg.classList.remove('on');return;}
+  if(currBestKg===0){bdg.classList.remove('on');return;}
+  let prevBestKg=0;
   for(let w=1;w<currentWeek;w++){
     for(let si=0;si<cnt+5;si++){
       const kg=parseFloat(S.g(K.set(pid,did,w,ei,si,'kg')))||0;
       const wdh=parseInt(S.g(K.set(pid,did,w,ei,si,'wdh')))||0;
-      if(kg>0&&wdh>0){const rm=kg*(1+wdh/30);if(rm>prev1RM)prev1RM=rm;}
+      if(kg>0&&wdh>0&&kg>prevBestKg)prevBestKg=kg;
     }
   }
-  // PR only if current 1RM beats previous best (or no previous data)
-  const isPR=curr1RM>prev1RM;
+  const isPR=currBestKg>prevBestKg;
   bdg.classList.toggle('on',isPR);
-  // Auto-save PR to hall of fame + show toast if genuinely new
-  if(isPR&&bestKg>0&&bestWdh>0){
+  // Toast only — persistent save happens at workout save
+  if(isPR&&bestWdh>0){
+    const prs=getPRs();
     const plans=getPlans();
     const pl=plans.find(p=>p.id===pid);
     const dy=pl&&pl.days.find(d=>d.id===did);
     const ex=dy&&dy.exercises[ei];
     if(ex){
       const exName=S.g(K.swap(pid,did,ei))||ex.name;
-      if(savePRFromWorkout(exName,bestKg,bestWdh)){
-        showPRToast(exName);
-      }
+      const stored=prs[exName];
+      if(!stored||currBestKg>stored.kg)showPRToast(exName);
     }
   }
 }
@@ -5670,12 +5672,44 @@ function savePRFromWorkout(exName,kg,wdh){
   const prs=getPRs();
   const rm=parseFloat((kg*(1+wdh/30)).toFixed(1));
   const stored=prs[exName];
-  if(!stored||rm>stored.rm){
+  if(!stored||kg>stored.kg){
     prs[exName]={kg,wdh,rm,date:new Date().toISOString().split('T')[0]};
     savePRs(prs);
     return true;
   }
   return false;
+}
+
+// Scannt alle Übungen eines Trainingstags und speichert PRs — aufgerufen beim SPEICHERN
+function saveAllWorkoutPRs(pid,did,week){
+  const plans=getPlans();
+  const pl=plans.find(p=>p.id===pid);
+  if(!pl)return;
+  const dy=pl.days.find(d=>d.id===did);
+  if(!dy)return;
+  dy.exercises.forEach((ex,ei)=>{
+    if(ex.cardio)return;
+    const cnt=getSetCount(pid,did,ei,ex.sets||3);
+    let currBestKg=0,bestWdh=0;
+    for(let si=0;si<cnt+5;si++){
+      const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
+      const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
+      if(kg>0&&wdh>0&&kg>currBestKg){currBestKg=kg;bestWdh=wdh;}
+    }
+    if(currBestKg===0)return;
+    let prevBestKg=0;
+    for(let w=1;w<week;w++){
+      for(let si=0;si<cnt+5;si++){
+        const kg=parseFloat(S.g(K.set(pid,did,w,ei,si,'kg')))||0;
+        const wdh=parseInt(S.g(K.set(pid,did,w,ei,si,'wdh')))||0;
+        if(kg>0&&wdh>0&&kg>prevBestKg)prevBestKg=kg;
+      }
+    }
+    if(currBestKg>prevBestKg){
+      const exName=S.g(K.swap(pid,did,ei))||ex.name;
+      savePRFromWorkout(exName,currBestKg,bestWdh);
+    }
+  });
 }
 
 function deletePR(exName){
