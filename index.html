@@ -5652,10 +5652,17 @@ async function copySummary(plan,day,pid,did,week){
   const pf=getPauseFrac(plan,did);const total=calcTDEE()+calcTrainKcal(tm,pf)+calcLaufKcal(lm,5,0);
   if(total)txt+='🔥 '+total+' kcal Tagesziel\n';
   txt+='━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
+  // Pausenzeiten
+  const _dayObj=plan.days.find(d=>d.id===did);
+  if(_dayObj){
+    const awP=_dayObj.pauseAW||75;const wkP=_dayObj.pauseWork||180;
+    txt+=`⏸ Pausen: AW ${awP}s · Arbeit ${wkP}s\n`;
+  }
   const stypeNames={mv:'MV 🔴',rir1:'RIR1',rir2:'RIR2',rir3:'RIR3',drop:'DROP',rp:'R+P',giant:'GIANT',feeder:'FEED',warm:'AW'};
   day.exercises.forEach((ex,ei)=>{
     const nm=S.g(K.swap(pid,did,ei))||ex.name;
-    txt+=`📌 ${nm}\n`;
+    const isUni=S.g(K.uni(pid,did,ei))==='1';
+    txt+=`📌 ${nm}${isUni?' (unilateral)':''}\n`;
     // Warmup sets
     if(ex.warmup)[0,1,2].forEach(ai=>{
       const kg=S.g(K.aw(pid,did,week,ei,ai,'kg'));
@@ -5665,16 +5672,28 @@ async function copySummary(plan,day,pid,did,week){
     // Work sets
     let vol=0;
     for(let si=0;si<20;si++){
-      const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg'))||0);
-      const reps=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh'))||0);
-      if(kg===0&&reps===0&&si>=getSetCount(pid,did,ei,ex.sets||3))break;
-      if(kg>0||reps>0){
-        const stype=S.g(KsetType(pid,did,ei,si))||'mv';
-        const stypeLbl=stypeNames[stype]||stype.toUpperCase();
-        const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
-        const onerm=kg&&reps?Math.round(kg*(1+reps/30)):0;
-        txt+=`   S${si+1} [${stypeLbl}]: ${kg||'–'}kg × ${reps||'–'}${onerm?' · 1RM~'+onerm+'kg':''}${note?' · '+note:''}\n`;
-        vol+=kg*reps;
+      const stype=S.g(KsetType(pid,did,ei,si))||'mv';
+      const stypeLbl=stypeNames[stype]||stype.toUpperCase();
+      const note=S.g(K.set(pid,did,week,ei,si,'notiz'))||'';
+      if(isUni){
+        const kgL=parseFloat(S.g(K.set(pid,did,week,ei,si,'kgL'))||0);
+        const wdhL=parseInt(S.g(K.set(pid,did,week,ei,si,'wdhL'))||0);
+        const kgR=parseFloat(S.g(K.set(pid,did,week,ei,si,'kgR'))||0);
+        const wdhR=parseInt(S.g(K.set(pid,did,week,ei,si,'wdhR'))||0);
+        if(kgL===0&&wdhL===0&&kgR===0&&wdhR===0&&si>=getSetCount(pid,did,ei,ex.sets||3))break;
+        if(kgL>0||wdhL>0||kgR>0||wdhR>0){
+          txt+=`   S${si+1} [${stypeLbl}]: L ${kgL||'–'}kg×${wdhL||'–'} · R ${kgR||'–'}kg×${wdhR||'–'}${note?' · '+note:''}\n`;
+          vol+=(kgL*wdhL)+(kgR*wdhR);
+        }
+      } else {
+        const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg'))||0);
+        const reps=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh'))||0);
+        if(kg===0&&reps===0&&si>=getSetCount(pid,did,ei,ex.sets||3))break;
+        if(kg>0||reps>0){
+          const onerm=kg&&reps?Math.round(kg*(1+reps/30)):0;
+          txt+=`   S${si+1} [${stypeLbl}]: ${kg||'–'}kg × ${reps||'–'}${onerm?' · 1RM~'+onerm+'kg':''}${note?' · '+note:''}\n`;
+          vol+=kg*reps;
+        }
       }
     }
     if(vol)txt+=`   Vol: ${Math.round(vol)}kg\n`;
