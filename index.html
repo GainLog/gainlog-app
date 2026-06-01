@@ -312,6 +312,16 @@ canvas{width:100%!important;display:block}
 .toggle::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .3s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
 .toggle.on::after{transform:translateX(22px)}
 
+/* PR HALL OF FAME */
+.pr-hall-card{background:var(--surface);border:1px solid rgba(245,158,11,.3);border-radius:var(--radius);padding:12px 14px;margin-bottom:7px;display:flex;align-items:center;gap:11px;position:relative;transition:all .2s}
+.pr-hall-trophy{font-size:20px;flex-shrink:0;width:28px;text-align:center}
+.pr-hall-info{flex:1;min-width:0}
+.pr-hall-name{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pr-hall-vals{font-family:'Bebas Neue',sans-serif;font-size:18px;color:var(--gold);letter-spacing:.5px;margin-top:2px}
+.pr-hall-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.pr-hall-del{font-size:11px;color:var(--muted2);cursor:pointer;width:22px;height:22px;border-radius:50%;background:var(--surface2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s}
+.pr-hall-del:active{background:rgba(239,68,68,.2);border-color:var(--red);color:var(--red)}
+
 /* PLAN MANAGER */
 .plancard{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 15px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:all .2s}
 .plancard.active{border-color:var(--blue);background:var(--blue-dim)}
@@ -855,6 +865,12 @@ select{background:var(--surface2);border:1px solid var(--border);border-radius:v
   <div style="margin:12px 15px 0;font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted)">📋 VORLAGEN</div>
   <div style="margin:8px 15px 0" id="plan-presets"></div>
 
+  <div style="margin:16px 15px 6px;display:flex;align-items:center;justify-content:space-between">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--muted)">🏆 PERSÖNLICHE BESTLEISTUNGEN</div>
+    <button onclick="openPREntryModal()" style="padding:5px 12px;border-radius:10px;border:1px solid rgba(245,158,11,.4);background:rgba(245,158,11,.08);color:#f59e0b;font-family:'DM Sans',sans-serif;font-size:11px;font-weight:700;cursor:pointer;letter-spacing:.5px">+ EINTRAGEN</button>
+  </div>
+  <div style="margin:0 15px 12px" id="pr-hall-list"></div>
+
   <div class="pslist">
     <div class="si" style="cursor:pointer;border-color:rgba(37,99,235,.25)" id="p-history" onclick="showWorkoutHistory()"><div class="sileft"><div class="siico">📊</div><div><div class="silbl" style="color:var(--blue2)">Training Historie</div><div class="sisub">Alle Workouts + Bewertungen ansehen</div></div></div><div class="sival" style="color:var(--blue2)">→</div></div>
     <div class="si" style="cursor:pointer;border-color:rgba(139,92,246,.25)" id="p-onboarding"><div class="sileft"><div class="siico">🔄</div><div><div class="silbl" style="color:#a78bfa">Onboarding wiederholen</div><div class="sisub">Ziel & Plan neu auswählen</div></div></div><div class="sival" style="color:#a78bfa">→</div></div>
@@ -865,6 +881,44 @@ select{background:var(--surface2);border:1px solid var(--border);border-radius:v
     <div class="si" style="cursor:pointer" id="p-info"><div class="sileft"><div class="siico">ℹ️</div><div><div class="silbl">Über GainLog</div><div class="sisub">Version, Kontakt & Nutzungsbedingungen</div></div></div><div class="sival">→</div></div>
   </div>
   <div style="height:20px"></div>
+</div>
+
+<!-- PR ENTRY MODAL -->
+<div class="mov" id="prEntryMov">
+  <div class="msheet" style="max-height:92vh">
+    <div class="mhdr">
+      <div class="mtit">🏆 PR EINTRAGEN</div>
+      <div class="msub">Persönliche Bestleistung speichern</div>
+      <button class="mclose" onclick="document.getElementById('prEntryMov').classList.remove('on')">✕</button>
+    </div>
+    <div style="padding:14px 15px 30px;overflow-y:auto;flex:1">
+      <div style="margin-bottom:12px">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.7px">Übung</div>
+        <input id="pr-entry-search" class="msearch" style="margin-top:0;width:100%;box-sizing:border-box" placeholder="Übung suchen..." oninput="filterPRExList(this.value)">
+        <div id="pr-entry-exlist" style="max-height:190px;overflow-y:auto;margin-top:6px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2)"></div>
+        <div id="pr-entry-selected" style="display:none;margin-top:6px;padding:9px 12px;border-radius:var(--radius-sm);background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);font-size:13px;font-weight:700;color:#f59e0b;display:none;cursor:pointer" onclick="resetPRExSelection()"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:12px">
+        <div>
+          <div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.7px">Gewicht (kg)</div>
+          <input id="pr-entry-kg" type="number" inputmode="decimal" class="sinp" placeholder="80" style="width:100%;box-sizing:border-box" oninput="updatePREntry1RM()">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.7px">Wiederholungen</div>
+          <input id="pr-entry-wdh" type="number" inputmode="numeric" class="sinp" placeholder="4" style="width:100%;box-sizing:border-box" oninput="updatePREntry1RM()">
+        </div>
+      </div>
+      <div id="pr-entry-1rm" style="display:none;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:var(--radius-sm);padding:10px 13px;margin-bottom:12px;text-align:center">
+        <div style="font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:2px">Geschätztes 1RM (Epley-Formel)</div>
+        <div id="pr-entry-1rm-val" style="font-family:'Bebas Neue',sans-serif;font-size:26px;color:var(--gold);letter-spacing:1px"></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:10px;color:var(--muted);font-weight:700;margin-bottom:6px;text-transform:uppercase;letter-spacing:.7px">Datum</div>
+        <input id="pr-entry-date" type="date" class="sinp" style="width:100%;box-sizing:border-box;color:var(--text);background:var(--surface2)">
+      </div>
+      <button onclick="savePREntry()" style="width:100%;padding:14px;border-radius:var(--radius);border:none;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;cursor:pointer;font-weight:900">PR SPEICHERN</button>
+    </div>
+  </div>
 </div>
 
 <!-- PLAN BUILDER -->
@@ -2790,7 +2844,7 @@ function updateTimerUI(){
 
 // ══ STATE ═════════════════════════════════════════════════
 let currentPage='log';
-let currentWeek=1;
+let currentWeek=parseInt(S.g('currentWeek'))||1;
 let currentDayId=null;
 const MAX_WEEKS=16;
 
@@ -4162,7 +4216,10 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
         tb.dataset.secs=pw;
         tb.dataset.lbl='Satzpause';
         function _doPause(){
-          window.gl_startTimer(parseInt(tb.dataset.secs)||180,tb.dataset.lbl||'Pause');
+          const _ps=parseInt(tb.dataset.secs)||180;
+          // Store last used pause for this exercise (for summary average)
+          S.s('pauseused_'+pid+'_'+did+'_'+week+'_'+ei, _ps);
+          window.gl_startTimer(_ps,tb.dataset.lbl||'Pause');
         }
         tb.addEventListener('touchstart',function(e){e.stopPropagation();unlockAudio();},{passive:true});
         tb.addEventListener('touchend',function(e){e.preventDefault();e.stopPropagation();_doPause();},{passive:false});
@@ -4250,16 +4307,14 @@ function getSetCount(pid,did,ei,def){
 
 function checkPR(pid,did,ei,day){
   const bdg=document.getElementById(`pr-${did}-${ei}`);if(!bdg)return;
-  // Show PR when workout is running or paused (not stopped)
-  const _woPaused=S.gj(K.wpause(pid,did,currentWeek));
-  if(!_woRunning&&!(_woPaused&&_woPaused.pausedAt)){bdg.style.display='none';return;}
   const cnt=getSetCount(pid,did,ei,3);
   // PR requires BOTH kg AND wdh to be filled in current week
   let curr1RM=0,prev1RM=0;
+  let bestKg=0,bestWdh=0;
   for(let si=0;si<cnt+5;si++){
     const kg=parseFloat(S.g(K.set(pid,did,currentWeek,ei,si,'kg')))||0;
     const wdh=parseInt(S.g(K.set(pid,did,currentWeek,ei,si,'wdh')))||0;
-    if(kg>0&&wdh>0){const rm=kg*(1+wdh/30);if(rm>curr1RM)curr1RM=rm;}
+    if(kg>0&&wdh>0){const rm=kg*(1+wdh/30);if(rm>curr1RM){curr1RM=rm;bestKg=kg;bestWdh=wdh;}}
   }
   // Only check PR if current has both kg+wdh
   if(curr1RM===0){bdg.classList.remove('on');return;}
@@ -4271,7 +4326,21 @@ function checkPR(pid,did,ei,day){
     }
   }
   // PR only if current 1RM beats previous best (or no previous data)
-  bdg.classList.toggle('on',curr1RM>prev1RM);
+  const isPR=curr1RM>prev1RM;
+  bdg.classList.toggle('on',isPR);
+  // Auto-save PR to hall of fame + show toast if genuinely new
+  if(isPR&&bestKg>0&&bestWdh>0){
+    const plans=getPlans();
+    const pl=plans.find(p=>p.id===pid);
+    const dy=pl&&pl.days.find(d=>d.id===did);
+    const ex=dy&&dy.exercises[ei];
+    if(ex){
+      const exName=S.g(K.swap(pid,did,ei))||ex.name;
+      if(savePRFromWorkout(exName,bestKg,bestWdh)){
+        showPRToast(exName);
+      }
+    }
+  }
 }
 
 function buildCardioCard(plan,day,pid,did,week){
@@ -5570,6 +5639,142 @@ function loadProfilPage(){
   if(psub)psub.textContent={recomp:'Body Recomp',aufbau:'Muskelaufbau',abnehmen:'Abnehmen'}[USER.goal||'recomp'];
   loadProfilPhoto();
   renderPlanList();renderImportBtn();renderPresetSection();
+  renderPRSection();
+}
+
+// ══ PR HALL OF FAME ════════════════════════════════════════
+function getPRs(){return S.gj('prs')||{};}
+function savePRs(prs){S.sj('prs',prs);}
+
+// Called by checkPR() when a workout PR is detected — returns true if it's actually new
+function savePRFromWorkout(exName,kg,wdh){
+  const prs=getPRs();
+  const rm=parseFloat((kg*(1+wdh/30)).toFixed(1));
+  const stored=prs[exName];
+  if(!stored||rm>stored.rm){
+    prs[exName]={kg,wdh,rm,date:new Date().toISOString().split('T')[0]};
+    savePRs(prs);
+    return true;
+  }
+  return false;
+}
+
+function deletePR(exName){
+  const prs=getPRs();
+  delete prs[exName];
+  savePRs(prs);
+  renderPRSection();
+  toast('🗑️ PR entfernt');
+}
+
+function renderPRSection(){
+  const el=document.getElementById('pr-hall-list');
+  if(!el)return;
+  const prs=getPRs();
+  const entries=Object.entries(prs).sort((a,b)=>b[1].rm-a[1].rm);
+  if(!entries.length){
+    el.innerHTML='<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--border2);border-radius:var(--radius)">Noch kein PR gespeichert.<br><span style="font-size:11px;color:var(--muted2)">Beim Training automatisch erkannt oder manuell eintragen.</span></div>';
+    return;
+  }
+  el.innerHTML=entries.map(([name,data])=>{
+    const dateStr=data.date?new Date(data.date).toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+    const safeName=name.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div class="pr-hall-card">
+      <div class="pr-hall-trophy">🏆</div>
+      <div class="pr-hall-info">
+        <div class="pr-hall-name">${name}</div>
+        <div class="pr-hall-vals">${data.kg} kg &times; ${data.wdh} Wdh</div>
+        <div class="pr-hall-sub">~${data.rm} kg 1RM${dateStr?' &middot; '+dateStr:''}</div>
+      </div>
+      <button class="pr-hall-del" onclick="deletePR('${safeName}')" title="PR löschen">✕</button>
+    </div>`;
+  }).join('');
+}
+
+let _prEntrySelectedEx=null;
+function openPREntryModal(){
+  _prEntrySelectedEx=null;
+  const els={kg:'pr-entry-kg',wdh:'pr-entry-wdh',search:'pr-entry-search',date:'pr-entry-date'};
+  Object.values(els).forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  const dateEl=document.getElementById('pr-entry-date');
+  if(dateEl)dateEl.value=new Date().toISOString().split('T')[0];
+  const sel=document.getElementById('pr-entry-selected');
+  if(sel){sel.style.display='none';sel.textContent='';}
+  const rm=document.getElementById('pr-entry-1rm');
+  if(rm)rm.style.display='none';
+  const exlist=document.getElementById('pr-entry-exlist');
+  if(exlist)exlist.style.display='';
+  const searchEl=document.getElementById('pr-entry-search');
+  if(searchEl)searchEl.style.display='';
+  filterPRExList('');
+  document.getElementById('prEntryMov').classList.add('on');
+}
+
+function filterPRExList(q){
+  const el=document.getElementById('pr-entry-exlist');
+  if(!el)return;
+  const db=getAllDB().filter(ex=>!ex.cardio);
+  const lq=(q||'').toLowerCase();
+  const filtered=lq?db.filter(e=>(e.de||'').toLowerCase().includes(lq)||(e.en||'').toLowerCase().includes(lq)):db.slice(0,40);
+  el.innerHTML=filtered.slice(0,40).map(ex=>{
+    const nm=ex.de||ex.name||'';
+    const safe=nm.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return `<div style="padding:9px 12px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s" onclick="selectPREx('${safe}')" onmouseenter="this.style.background='var(--surface)'" onmouseleave="this.style.background=''">
+      <div style="font-size:13px;font-weight:700;color:var(--text)">${nm}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:1px">${ex.cat||''} &middot; ${ex.typ||''}</div>
+    </div>`;
+  }).join('')||'<div style="padding:14px;text-align:center;color:var(--muted);font-size:12px">Keine Übung gefunden</div>';
+}
+
+function selectPREx(name){
+  _prEntrySelectedEx=name;
+  const sel=document.getElementById('pr-entry-selected');
+  if(sel){sel.textContent='✓ '+name+' (tippen zum Ändern)';sel.style.display='block';}
+  const exlist=document.getElementById('pr-entry-exlist');
+  if(exlist)exlist.style.display='none';
+  const searchEl=document.getElementById('pr-entry-search');
+  if(searchEl)searchEl.style.display='none';
+}
+
+function resetPRExSelection(){
+  _prEntrySelectedEx=null;
+  const sel=document.getElementById('pr-entry-selected');
+  if(sel){sel.style.display='none';sel.textContent='';}
+  const exlist=document.getElementById('pr-entry-exlist');
+  if(exlist)exlist.style.display='';
+  const searchEl=document.getElementById('pr-entry-search');
+  if(searchEl){searchEl.style.display='';searchEl.value='';searchEl.focus();}
+  filterPRExList('');
+}
+
+function updatePREntry1RM(){
+  const kg=parseFloat(document.getElementById('pr-entry-kg')?.value)||0;
+  const wdh=parseInt(document.getElementById('pr-entry-wdh')?.value)||0;
+  const rmEl=document.getElementById('pr-entry-1rm');
+  const rmVal=document.getElementById('pr-entry-1rm-val');
+  if(kg>0&&wdh>0&&rmEl&&rmVal){
+    const rm=parseFloat((kg*(1+wdh/30)).toFixed(1));
+    rmEl.style.display='block';
+    rmVal.textContent=rm+' kg';
+  } else if(rmEl){
+    rmEl.style.display='none';
+  }
+}
+
+function savePREntry(){
+  if(!_prEntrySelectedEx){toast('⚠️ Bitte Übung auswählen');return;}
+  const kg=parseFloat(document.getElementById('pr-entry-kg')?.value)||0;
+  const wdh=parseInt(document.getElementById('pr-entry-wdh')?.value)||0;
+  if(!kg||kg<1){toast('⚠️ Gewicht eingeben');return;}
+  if(!wdh||wdh<1){toast('⚠️ Wiederholungen eingeben');return;}
+  const date=document.getElementById('pr-entry-date')?.value||new Date().toISOString().split('T')[0];
+  const rm=parseFloat((kg*(1+wdh/30)).toFixed(1));
+  const prs=getPRs();
+  prs[_prEntrySelectedEx]={kg,wdh,rm,date};
+  savePRs(prs);
+  document.getElementById('prEntryMov').classList.remove('on');
+  renderPRSection();
+  toast('🏆 PR gespeichert!');
 }
 
 function loadProfilPhoto(){
@@ -5652,11 +5857,21 @@ async function copySummary(plan,day,pid,did,week){
   const pf=getPauseFrac(plan,did);const total=calcTDEE()+calcTrainKcal(tm,pf)+calcLaufKcal(lm,5,0);
   if(total)txt+='🔥 '+total+' kcal Tagesziel\n';
   txt+='━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-  // Pausenzeiten
-  const _dayObj=plan.days.find(d=>d.id===did);
-  if(_dayObj){
-    const awP=_dayObj.pauseAW||75;const wkP=_dayObj.pauseWork||180;
-    txt+=`⏸ Pausen: AW ${awP}s · Arbeit ${wkP}s\n`;
+  // Pausenzeiten - Durchschnitt der tatsächlich genutzten Pausen
+  const _pauseVals=[];
+  day.exercises.forEach((ex,ei)=>{
+    const v=parseInt(S.g('pauseused_'+pid+'_'+did+'_'+week+'_'+ei))||0;
+    if(v>0)_pauseVals.push(v);
+  });
+  if(_pauseVals.length>0){
+    const _avgPause=Math.round(_pauseVals.reduce((a,b)=>a+b,0)/_pauseVals.length);
+    const _minP=Math.min(..._pauseVals);const _maxP=Math.max(..._pauseVals);
+    const fmtP=s=>s<60?s+'s':(s%60===0?Math.floor(s/60)+'min':Math.floor(s/60)+':'+String(s%60).padStart(2,'0'));
+    txt+=`⏸ Pausen: Ø ${fmtP(_avgPause)}${_minP!==_maxP?' ('+fmtP(_minP)+'–'+fmtP(_maxP)+')':''}\n`;
+  } else {
+    const _dayObj=plan.days.find(d=>d.id===did);
+    if(_dayObj){const awP=_dayObj.pauseAW||75;const wkP=_dayObj.pauseWork||180;
+    txt+=`⏸ Pausen: AW ${awP}s · Arbeit ${wkP}s (Preset)\n`;}
   }
   const stypeNames={mv:'MV 🔴',rir1:'RIR1',rir2:'RIR2',rir3:'RIR3',drop:'DROP',rp:'R+P',giant:'GIANT',feeder:'FEED',warm:'AW'};
   day.exercises.forEach((ex,ei)=>{
@@ -6332,8 +6547,8 @@ addSiTouch('p-reset',confirmReset);
 
 // ══ NAV EVENTS ════════════════════════════════════════════
 document.querySelectorAll('.ni').forEach(ni=>ni.addEventListener('click',()=>showPage(ni.getAttribute('data-p'))));
-document.getElementById('wbtn-prev').addEventListener('click',()=>{if(currentWeek>1){currentWeek--;document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);}});
-document.getElementById('wbtn-next').addEventListener('click',()=>{if(currentWeek<MAX_WEEKS){currentWeek++;document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);}});
+document.getElementById('wbtn-prev').addEventListener('click',()=>{if(currentWeek>1){currentWeek--;S.s('currentWeek',currentWeek);document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);}});
+document.getElementById('wbtn-next').addEventListener('click',()=>{if(currentWeek<MAX_WEEKS){currentWeek++;S.s('currentWeek',currentWeek);document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);}});
 document.getElementById('tr-skip').addEventListener('click',()=>{
   clearInterval(_ti);_ti=null;_timerEndTs=null;
   document.removeEventListener('visibilitychange',_timerVisHandler);
