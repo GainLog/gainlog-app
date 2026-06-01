@@ -4867,17 +4867,20 @@ function updateDash(){
   const nx=document.getElementById('nxname');if(nx)nx.textContent=(next.icon||'💪')+' '+next.name;
   const nd=document.getElementById('nxdet');if(nd)nd.textContent=next.exercises.length+' Übungen · '+next.exercises.reduce((a,e)=>a+(e.sets||3),0)+' Sätze';
 
-  // PRs
-  const prs=[];
-  plan.days.forEach(d=>d.exercises.forEach((ex,ei)=>{
-    const nm=S.g(K.swap(plan.id,d.id,ei))||ex.name;
-    let mK=0,mW=0;
-    for(let w=1;w<=MAX_WEEKS;w++){const cnt=getSetCount(plan.id,d.id,ei,ex.sets||3);for(let si=0;si<cnt;si++){const v=parseFloat(S.g(K.set(plan.id,d.id,w,ei,si,'kg'))||0);if(v>mK){mK=v;mW=w;}}}
-    if(mK>0)prs.push({name:nm,day:d.name,kg:mK,week:mW});
-  }));
-  prs.sort((a,b)=>b.kg-a.kg);
+  // PRs — aus gl_prs (bereinigt, manuell/beim Speichern gesetzt)
   const prl=document.getElementById('prlist');
-  if(prl)prl.innerHTML=prs.slice(0,6).map(pr=>`<div class="pritem"><div><div class="prname">${pr.name.replace(/ \(.*\)/,'')}</div><div class="prday">${pr.day} · W${pr.week}</div></div><div><div class="prwt">${pr.kg}</div><div class="pru">kg</div></div></div>`).join('')||'<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Noch keine Daten</div>';
+  if(prl){
+    const glprs=getPRs();
+    const prEntries=Object.entries(glprs).sort((a,b)=>b[1].kg-a[1].kg);
+    if(prEntries.length){
+      prl.innerHTML=prEntries.slice(0,6).map(([name,data])=>{
+        const shortName=name.replace(/ \(.*\)/,'');
+        return `<div class="pritem"><div><div class="prname">${shortName}</div><div class="prday">${data.date||''}</div></div><div><div class="prwt">${data.kg}</div><div class="pru">kg</div></div></div>`;
+      }).join('');
+    } else {
+      prl.innerHTML='<div style="padding:14px;text-align:center;color:var(--muted);font-size:13px">Noch keine PRs gespeichert</div>';
+    }
+  }
 }
 
 // ══ CHARTS ════════════════════════════════════════════════
