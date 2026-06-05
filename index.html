@@ -1800,6 +1800,18 @@ const REP_RANGES=[
 
 function KrrEx(pid,did,ei){return 'rr_'+pid+'_'+did+'_e'+ei;}
 
+// Rep range für einen Tag — wochenspezifisch mit Fallback auf Vorwochen
+function getDayRR(pid,did,week){
+  for(let w=week;w>=1;w--){
+    const k=S.gj('dayrr_'+pid+'_'+did+'_w'+w);
+    if(k&&k.min)return k;
+  }
+  // Migration: alter Key ohne Woche
+  const old=S.gj('dayrr_'+pid+'_'+did);
+  if(old&&old.min)return old;
+  return null;
+}
+
 // Store current context directly on picker element – no closure dependency
 function openRepRangePicker(pid,did,ei,badgeEl){
   const picker=document.getElementById('rrPicker');
@@ -1895,7 +1907,7 @@ function getDefaultRRForDay(day){
 function checkWdhInRange(wdhEl,pid,did,week,ei,si,day){
   // Use per-exercise range if set, else use day range picker, else day default
   const saved=S.gj(KrrEx(pid,did,ei));
-  const _dayRR=S.gj('dayrr_'+pid+'_'+did);
+  const _dayRR=getDayRR(pid,did,week);
   const range=saved&&saved.min?saved:(_dayRR&&_dayRR.min?_dayRR:(day?getDefaultRRForDay(day):null));
   wdhEl.style.borderColor='';wdhEl.style.background='';wdhEl.title='';
   if(!range||!range.min)return;
@@ -2184,7 +2196,7 @@ function exportPlanAsText(plan){
       if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
       else{
         // Use day rep range picker value
-        const _dayRRExp=S.gj('dayrr_'+plan.id+'_'+day.id);
+        const _dayRRExp=getDayRR(plan.id,day.id,currentWeek);
         if(_dayRRExp&&_dayRRExp.min)rrStr=' · '+_dayRRExp.min+'–'+_dayRRExp.max+' Wdh';
         else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
       }
@@ -2972,7 +2984,7 @@ function calcPerformanceScore(pid,did,week){
 
   day.exercises.forEach((ex,ei)=>{
     const cnt=getSetCount(pid,did,ei,ex.sets||3);
-    const rr=S.gj(KrrEx(pid,did,ei))||getDefaultRRForDay(day);
+    const rr=S.gj(KrrEx(pid,did,ei))||getDayRR(pid,did,week)||getDefaultRRForDay(day);
     let exHasSets=false;
 
     for(let si=0;si<cnt;si++){
@@ -3554,9 +3566,9 @@ function renderLog(){
   c.appendChild(buildKcalWidget(plan,day,pf));
 
   // Rep Range Picker – simple Von/Bis inputs
-  const _rrDayKey='dayrr_'+pid+'_'+did;
+  const _rrDayKey='dayrr_'+pid+'_'+did+'_w'+week;
   if(day.rrMin&&day.rrMax){const _existing=S.gj(_rrDayKey);if(!_existing||_existing._fromPlan){S.sj(_rrDayKey,{min:day.rrMin,max:day.rrMax,_fromPlan:true});}}
-  const _rrSaved=S.gj(_rrDayKey)||{min:6,max:12};
+  const _rrSaved=getDayRR(pid,did,week)||{min:6,max:12};
   const ttWrap=document.createElement('div');
   ttWrap.style.cssText='background:#111;border:1px solid #222;border-radius:12px;padding:10px;margin-bottom:10px;display:flex;align-items:center;gap:10px';
   const ttLabel=document.createElement('div');
@@ -4220,7 +4232,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week){
       const rrHint=document.createElement('div');
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
       function updateRRHint(){
-        const _rrDay=S.gj('dayrr_'+pid+'_'+did)||{min:6,max:12};
+        const _rrDay=getDayRR(pid,did,week)||{min:6,max:12};
         rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div class="rr-hint-val" style="font-size:12px;font-weight:800;color:var(--green)">'+_rrDay.min+'–'+_rrDay.max+'</div>';
       }
       updateRRHint();
