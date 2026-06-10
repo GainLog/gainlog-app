@@ -2131,8 +2131,9 @@ function buildWeekView(){
         window.scrollTo(0,0);
       });
     } else if(isRest){
-      cell.addEventListener('click',()=>toast('😴 Ruhetag – Erhol dich gut!'));
-      cell.addEventListener('touchend',e=>{e.preventDefault();toast('😴 Ruhetag – Erhol dich gut!');},{passive:false});
+      cell.style.cursor='pointer';
+      cell.addEventListener('click',()=>openWeekAssign());
+      cell.addEventListener('touchend',e=>{e.preventDefault();openWeekAssign();},{passive:false});
     }
     wrap.appendChild(cell);
   });
