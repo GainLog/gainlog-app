@@ -5918,6 +5918,13 @@ function renderTrainingDayDetail(pid,did,week){
       ${prTxt?`<div class="texitem-pr">${ic('trophy',10)} ${prTxt}</div>`:''}`;
 
     item.addEventListener('click',()=>{
+      // Erneuter Klick auf die bereits offene Übung → zuklappen
+      if(item.classList.contains('texitem-active')){
+        item.classList.remove('texitem-active');
+        const old=ct.querySelector('.texp-detail-panel');
+        if(old)old.remove();
+        return;
+      }
       // Mark active
       listWrap.querySelectorAll('.texitem').forEach(x=>x.classList.remove('texitem-active'));
       item.classList.add('texitem-active');
