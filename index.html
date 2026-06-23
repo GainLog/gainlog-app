@@ -5909,13 +5909,29 @@ function renderTrainingDayDetail(pid,did,week){
 
     const item=document.createElement('div');item.className='texitem';item.setAttribute('data-ei',ei);
     const _catColor=getMuscleColor(ex.cat||'Brust');
+    const isFirst=ei===0, isLast=ei===day.exercises.length-1;
     item.innerHTML=`
       <div class="texitem-ico" style="color:${_catColor};background:${_catColor}1f">${ic('dumbbell',16)}</div>
       <div class="texitem-info">
         <div class="texitem-name">${exName}</div>
         <div class="texitem-sub">${ex.sets||3} Sätze${lastTxt?' · '+lastTxt:''}</div>
       </div>
-      ${prTxt?`<div class="texitem-pr">${ic('trophy',10)} ${prTxt}</div>`:''}`;
+      ${prTxt?`<div class="texitem-pr">${ic('trophy',10)} ${prTxt}</div>`:''}
+      <div class="texitem-movewrap" style="display:flex;flex-direction:column;gap:2px;margin-left:4px;flex-shrink:0">
+        <div class="texitem-move" data-dir="up" style="font-size:11px;line-height:1;cursor:pointer;padding:3px 6px;color:${isFirst?'#3a3a3a':'var(--muted)'}">▲</div>
+        <div class="texitem-move" data-dir="down" style="font-size:11px;line-height:1;cursor:pointer;padding:3px 6px;color:${isLast?'#3a3a3a':'var(--muted)'}">▼</div>
+      </div>`;
+
+    item.querySelectorAll('.texitem-move').forEach(btn=>{
+      btn.addEventListener('click',(e)=>{
+        e.stopPropagation(); // verhindert, dass der Klick zusätzlich das Übungsdetail öffnet/schließt
+        const dir=btn.getAttribute('data-dir');
+        const targetEi=dir==='up'?ei-1:ei+1;
+        if(targetEi<0||targetEi>=day.exercises.length)return;
+        const ok=moveExInLog(pid,did,week,ei,targetEi);
+        if(ok)renderTrainingDayDetail(pid,did,week); // komplette Liste neu aufbauen, Indizes haben sich verschoben
+      });
+    });
 
     item.addEventListener('click',()=>{
       // Erneuter Klick auf die bereits offene Übung → zuklappen
@@ -6155,6 +6171,40 @@ function renderExDetail(pid,did,week,ei,ex,exName,ct,listWrap){
 
 function getSetCount(pid,did,ei,def){
   const v=S.g(K.csets(pid,did,ei));return v?Math.max(1,parseInt(v)||def):def;
+}
+
+// Prüft ob für eine Übung (Index ei) in einer bestimmten Woche bereits Satzdaten eingetragen wurden.
+// Wird benötigt, um Reorder-im-Log gegen Datenverwechslung abzusichern (Sätze hängen am Index ei, nicht an einer stabilen Übungs-ID).
+function hasSetDataInWeek(pid,did,week,ei,setCount){
+  const cnt=Math.max(setCount||3,10); // großzügig prüfen, auch bereits hinzugefügte Extra-Sätze
+  for(let si=0;si<cnt;si++){
+    const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
+    const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
+    if(kg>0&&wdh>0)return true;
+  }
+  return false;
+}
+
+// Vertauscht zwei Übungen im Plan dauerhaft (wirkt auch auf künftige Wochen).
+// Sicherheitsregel: Tausch nur wenn KEINE der beiden Übungen in der aktuellen Woche bereits ausgefüllte Sätze hat —
+// sonst würden Satz-Daten (die am Array-Index hängen) der falschen Übung zugeordnet.
+function moveExInLog(pid,did,week,idxA,idxB){
+  const plans=getPlans();
+  const plan=plans.find(p=>p.id===pid);
+  if(!plan)return false;
+  const day=plan.days.find(d=>d.id===did);
+  if(!day||!day.exercises[idxA]||!day.exercises[idxB])return false;
+
+  const cntA=getSetCount(pid,did,idxA,day.exercises[idxA].sets||3);
+  const cntB=getSetCount(pid,did,idxB,day.exercises[idxB].sets||3);
+  if(hasSetDataInWeek(pid,did,week,idxA,cntA)||hasSetDataInWeek(pid,did,week,idxB,cntB)){
+    toast('⚠️ Tausch nicht möglich: eine der Übungen hat diese Woche schon Sätze');
+    return false;
+  }
+
+  const tmp=day.exercises[idxA];day.exercises[idxA]=day.exercises[idxB];day.exercises[idxB]=tmp;
+  savePlans(plans);
+  return true;
 }
 
 function checkPR(pid,did,ei,day,silent=false){
