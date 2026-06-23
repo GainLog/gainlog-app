@@ -1353,11 +1353,9 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
       <div class="wlog" id="weightLog"></div>
     </div>
     <div class="ccon">
-      <div class="ctit">📐 KÖRPERMASZE</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Einmal pro Woche messen und eintragen</div>
-      <div class="mgrid" id="m-grid"></div>
-      <button class="wibtn" id="m-savebtn" style="width:100%;margin-top:4px">MASZE SPEICHERN</button>
-      <canvas id="measChart" height="140" style="margin-top:12px"></canvas>
+      <div class="ctit">🔥 KALORIEN &amp; GEWICHT ANALYSE</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Geschätzt aus deinem Gewichtsverlauf — kein zusätzliches Eintragen nötig</div>
+      <div id="kcal-analysis-body"></div>
     </div>
     <div class="ccon">
       <div class="ctit">🏆 HALL OF FAME</div>
@@ -6877,42 +6875,128 @@ function renderWeightLog(){
   }).join('')||'<div style="text-align:center;color:var(--muted);font-size:12px;padding:14px">Noch keine Einträge</div>';
 }
 
-// ── MEASUREMENTS ──────────────────────────────────────────
-const MEAS_FIELDS=[{k:'brust',de:'Brust',en:'Chest'},{k:'taille',de:'Taille',en:'Waist'},{k:'huefte',de:'Hüfte',en:'Hips'},{k:'oberarm',de:'Oberarm',en:'Bicep'},{k:'oberschenkel',de:'Oberschenkel',en:'Thigh'},{k:'nacken',de:'Nacken',en:'Neck'}];
+// ── KALORIEN & GEWICHT ANALYSE ────────────────────────────
+// Schätzt die tatsächliche Energiebilanz NICHT aus einem Kalorien-Log (das gibt es in GainLog nicht),
+// sondern rückwärts aus dem echten Gewichtsverlauf: 1kg Körpergewicht ≈ 7700 kcal.
+// Das ist absichtlich so gewählt (siehe Sven-Absprache) statt eines Tages-Kalorien-Eingabefelds,
+// weil es ohne zusätzliche Dateneingabe funktioniert und den TATSÄCHLICHEN Verlauf misst statt eine
+// Bedarfsformel (TDEE) blind zu glauben.
 
-function renderMeasGrid(){
-  const grid=document.getElementById('m-grid');if(!grid)return;
-  const today=new Date().toISOString().split('T')[0];
-  const allMeas=S.gj('measurements')||[];const todayMeas=allMeas.find(m=>m.date===today)||{};
-  grid.innerHTML='';
-  MEAS_FIELDS.forEach(f=>{
-    const cell=document.createElement('div');cell.className='mcell';
-    const lbl=document.createElement('div');lbl.className='mclbl';lbl.textContent=lang==='en'?f.en:f.de;
-    const inp=document.createElement('input');inp.className='mcinp';inp.type='number';inp.inputMode='decimal';inp.placeholder='cm';inp.value=todayMeas[f.k]||'';inp.id='meas-'+f.k;
-    cell.appendChild(lbl);cell.appendChild(inp);grid.appendChild(cell);
+// Liefert den Gewichtswert nahe einem Zieldatum (±toleranceDays), oder null wenn nichts in der Nähe liegt.
+// Wichtig bei lückenhaften Log-Daten: wir wollen NICHT so tun als gäbe es exakt-7-Tage-alte Werte,
+// wenn der Nutzer z.B. nur alle 10 Tage wiegt.
+function findWeightNear(weights,targetDate,toleranceDays){
+  let best=null,bestDiff=Infinity;
+  weights.forEach(w=>{
+    const diff=Math.abs((new Date(w.date)-targetDate)/86400000);
+    if(diff<=toleranceDays&&diff<bestDiff){best=w;bestDiff=diff;}
   });
+  return best;
 }
 
-function saveMeasurements(){
-  const today=new Date().toISOString().split('T')[0];
-  const allMeas=S.gj('measurements')||[];const idx=allMeas.findIndex(m=>m.date===today);
-  const entry={date:today};
-  MEAS_FIELDS.forEach(f=>{const _mel=document.getElementById('meas-'+f.k);const v=parseFloat(_mel?_mel.value:0)||0;if(v)entry[f.k]=v;});
-  if(Object.keys(entry).length<=1){toast('⚠️ Bitte mindestens einen Wert eingeben');return;}
-  if(idx>=0)allMeas[idx]=entry;else allMeas.push(entry);
-  allMeas.sort((a,b)=>a.date.localeCompare(b.date));
-  S.sj('measurements',allMeas);
-  renderMeasChart();toast('✅ Maße gespeichert');
+// Einfache lineare Regression (Tage seit erstem Punkt → kg) über einen Zeitraum.
+// Liefert Steigung in kg/Tag. Robuster gegen Eintages-Ausreißer als reine Endpunkt-Differenz.
+function weightTrendSlope(weights){
+  if(weights.length<2)return null;
+  const t0=new Date(weights[0].date).getTime();
+  const pts=weights.map(w=>({x:(new Date(w.date).getTime()-t0)/86400000,y:w.kg}));
+  const n=pts.length;
+  const sumX=pts.reduce((s,p)=>s+p.x,0), sumY=pts.reduce((s,p)=>s+p.y,0);
+  const sumXY=pts.reduce((s,p)=>s+p.x*p.y,0), sumXX=pts.reduce((s,p)=>s+p.x*p.x,0);
+  const denom=(n*sumXX-sumX*sumX);
+  if(denom===0)return null; // alle Punkte am selben Tag o.ä. — keine sinnvolle Steigung berechenbar
+  return (n*sumXY-sumX*sumY)/denom; // kg pro Tag
 }
 
-function renderMeasChart(){
-  const canvas=document.getElementById('measChart');if(!canvas)return;
-  const allMeas=S.gj('measurements')||[];
-  if(allMeas.length<2){const ctx=canvas.getContext('2d');const dpr=window.devicePixelRatio||1;const W=canvas.parentElement.clientWidth-32;canvas.width=W*dpr;canvas.height=140*dpr;canvas.style.width=W+'px';canvas.style.height='140px';ctx.scale(dpr,dpr);ctx.fillStyle='#555';ctx.font='13px DM Sans';ctx.textAlign='center';ctx.fillText('Mindestens 2 Einträge nötig',W/2,70);return;}
-  // Just chart body weight as example – or first measurement with data
-  const field=MEAS_FIELDS.find(f=>allMeas.some(m=>m[f.k]))||MEAS_FIELDS[0];
-  const data=allMeas.filter(m=>m[field.k]);
-  drawLineChart(canvas,data,140,d=>d[field.k],d=>d.date.slice(5),'#22c55e');
+function renderKcalAnalysis(){
+  const body=document.getElementById('kcal-analysis-body');if(!body)return;
+  const weights=(S.gj('weights')||[]).slice().sort((a,b)=>a.date.localeCompare(b.date));
+  const today=new Date();
+
+  if(weights.length<2){
+    body.innerHTML=`<div style="text-align:center;color:var(--muted);font-size:12px;padding:18px 10px;line-height:1.6">📉 Noch nicht genug Gewichtsdaten.<br>Trag mindestens 2x dein Gewicht ein (idealerweise über mehrere Tage verteilt), dann erscheint hier die Analyse.</div>`;
+    return;
+  }
+
+  const tdee=calcTDEE();
+  const tdeeIsFallback=!USER.gewicht||!USER.alter||!USER.groesse; // calcTDEE() gibt sonst stillschweigend 2000 zurück
+
+  // 7-Tage und 30-Tage Fenster: wir suchen den jeweils nächstgelegenen Wert in Toleranz,
+  // statt strikt auf exakte Tagesdifferenz zu bestehen (Edge Case: Nutzer wiegt sich unregelmäßig).
+  const w7ago=findWeightNear(weights,new Date(today-7*86400000),3);
+  const w30ago=findWeightNear(weights,new Date(today-30*86400000),7);
+  const latest=weights[weights.length-1];
+
+  const diff7=w7ago?+(latest.kg-w7ago.kg).toFixed(2):null;
+  const diff30=w30ago?+(latest.kg-w30ago.kg).toFixed(2):null;
+
+  // Trend für Prognose & Ampel: 30-Tage-Slope ist stabiler als 7-Tage (weniger anfällig für Wasser/Salz-Ausreißer an einzelnen Tagen).
+  const last30=weights.filter(w=>(today-new Date(w.date))/86400000<=32);
+  const slopePerDay=weightTrendSlope(last30.length>=2?last30:weights); // Fallback: alle Daten falls <30 Tage Historie
+
+  // Geschätztes Tagesdefizit/-überschuss aus echtem Gewichtstrend (7700 kcal/kg), nicht aus TDEE-Formel.
+  const estKcalPerDay=slopePerDay!=null?Math.round(slopePerDay*7700):null;
+
+  // Trendampel: NUR auf geglättetem Trend (slopePerDay aus Regression), nicht auf Tageswerten —
+  // sonst zeigt ein normaler Wassertag fälschlich "rot" obwohl der echte Trend passt.
+  let trendColor='#94a3b8',trendLabel='Zu wenig Daten',trendIcon='⏳';
+  if(slopePerDay!=null){
+    const weeklyKg=slopePerDay*7;
+    const goal=USER.goal||'recomp';
+    if(goal==='abnehmen'){
+      if(weeklyKg<=-0.3&&weeklyKg>=-1.0){trendColor='#22c55e';trendLabel='Im Zielbereich';trendIcon='✅';}
+      else if(weeklyKg<0.2&&weeklyKg>-1.5){trendColor='#f59e0b';trendLabel='Beobachten';trendIcon='⚠️';}
+      else{trendColor='#ef4444';trendLabel='Außerhalb Zielbereich';trendIcon='🚨';}
+    } else if(goal==='aufbau'){
+      if(weeklyKg>=0.1&&weeklyKg<=0.5){trendColor='#22c55e';trendLabel='Im Zielbereich';trendIcon='✅';}
+      else if(weeklyKg>-0.2&&weeklyKg<0.8){trendColor='#f59e0b';trendLabel='Beobachten';trendIcon='⚠️';}
+      else{trendColor='#ef4444';trendLabel='Außerhalb Zielbereich';trendIcon='🚨';}
+    } else { // recomp / Erhalt: möglichst stabil
+      if(Math.abs(weeklyKg)<=0.25){trendColor='#22c55e';trendLabel='Stabil';trendIcon='✅';}
+      else if(Math.abs(weeklyKg)<=0.6){trendColor='#f59e0b';trendLabel='Leichte Drift';trendIcon='⚠️';}
+      else{trendColor='#ef4444';trendLabel='Deutliche Drift';trendIcon='🚨';}
+    }
+  }
+
+  // Prognose 30 Tage: lineare Fortschreibung des 30-Tage-Trends. Bewusst MIT Unsicherheits-Hinweis,
+  // weil eine lineare Extrapolation über einen vollen Monat bei nur wenigen Datenpunkten leicht danebenliegt.
+  const forecast30=slopePerDay!=null?+(latest.kg+slopePerDay*30).toFixed(1):null;
+  const lowDataWarning=last30.length<4; // <4 Punkte über 30 Tage = Prognose mit Vorsicht zu genießen
+
+  const fmtDiff=(v)=>v==null?'–':(v>0?'+':'')+v.toFixed(1)+' kg';
+  const fmtKcal=(v)=>v==null?'–':(v>0?'+':'')+v+' kcal/Tag';
+
+  body.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="background:var(--surface2);border-radius:12px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">GEWICHT 7 TAGE</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${diff7==null?'var(--muted)':(diff7<=0?'var(--green)':'var(--red)')}">${fmtDiff(diff7)}</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:10px 12px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:3px">GEWICHT 30 TAGE</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${diff30==null?'var(--muted)':(diff30<=0?'var(--green)':'var(--red)')}">${fmtDiff(diff30)}</div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px;margin-bottom:12px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">GESCHÄTZTES TAGESDEFIZIT/-ÜBERSCHUSS</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${estKcalPerDay==null?'var(--muted)':(estKcalPerDay<0?'var(--green)':'var(--gold)')}">${fmtKcal(estKcalPerDay)}</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">Berechnet aus deinem echten Gewichtstrend (1kg ≈ 7700 kcal) — nicht aus deinem TDEE.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise, daher kann GainLog nur den Gewichtstrend nutzen, keinen vollständigen TDEE-Abgleich.)':''}</div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:10px;background:${trendColor}1a;border:1px solid ${trendColor}55;border-radius:12px;padding:11px 13px;margin-bottom:12px">
+      <div style="font-size:20px">${trendIcon}</div>
+      <div>
+        <div style="font-weight:700;font-size:13px;color:${trendColor}">${trendLabel}</div>
+        <div style="font-size:10.5px;color:var(--muted)">Trendampel · Basis: geglätteter Verlauf, nicht Tageswerte</div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">GEWICHTSPROGNOSE 30 TAGE</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">${forecast30!=null?'Lineare Hochrechnung deines aktuellen Trends. '+(lowDataWarning?'⚠️ Basis sind nur '+last30.length+' Einträge in 30 Tagen — bei so wenig Daten kann diese Prognose deutlich abweichen.':'') : 'Noch nicht genug Datenpunkte für eine Prognose.'}</div>
+    </div>`;
 }
 
 // ── HALL OF FAME / LIFETIME STATS ─────────────────────────
@@ -8021,7 +8105,7 @@ function showPage(page){
   window.scrollTo(0,0);
   if(page==='dash')updateDash();
   if(page==='kcal')renderKcalPage();
-  if(page==='charts')setTimeout(()=>{renderWeightChart();renderWeightLog();renderMeasGrid();renderMeasChart();renderHallOfFame();renderExChips();renderVolChart();},60);
+  if(page==='charts')setTimeout(()=>{renderWeightChart();renderWeightLog();renderKcalAnalysis();renderHallOfFame();renderExChips();renderVolChart();},60);
   if(page==='profil')loadProfilPage();
   if(page==='log')renderLog();
 }
@@ -8729,7 +8813,6 @@ document.querySelectorAll('#addex-filters .fchip').forEach(c=>c.addEventListener
 document.querySelectorAll('#pbex-filters .fchip').forEach(c=>c.addEventListener('click',()=>{document.querySelectorAll('#pbex-filters .fchip').forEach(x=>x.classList.remove('on'));c.classList.add('on');renderPBExList();}));
 const _nxEl=document.getElementById('nxcard');if(_nxEl)_nxEl.addEventListener('click',()=>{if(window._nextDay){setCurrentDay(window._nextDay.id);currentDayId=window._nextDay.id;showPage('log');}});
 document.getElementById('wi-btn')?.addEventListener('click',addWeight);
-document.getElementById('m-savebtn')?.addEventListener('click',saveMeasurements);
 document.querySelectorAll('#kc-tm,#kc-lm,#kc-kmh,#kc-steig,#kc-steps').forEach(el=>el.addEventListener('input',calcKcalPage));
 
 // ══ TOAST ═════════════════════════════════════════════════
