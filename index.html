@@ -2990,6 +2990,91 @@ const K={
   uni:(pid,did,ei)=>`uni_${pid}_${did}_e${ei}`,
 };
 
+// ══ ÜBUNGS-REORDER: ZENTRALE DATENMIGRATION ═══════════════
+// Sämtliche Trainingsdaten hängen am Array-Index 'ei', nicht an einer stabilen Übungs-ID.
+// Vollständige Liste (verifiziert per Suche nach allen `_e${ei}`/`+ei`-Key-Mustern im Code, Stand
+// dieser Session — bei künftigen neuen Features mit pro-Übung-Daten muss diese Liste erweitert werden):
+//   - K.set       (pro Woche, pro Satz, 6 Felder: kg/wdh/kgL/kgR/wdhL/wdhR)
+//   - K.aw        (pro Woche, pro Aufwärmsatz, gleiche 6 Felder)
+//   - K.vw        (pro Woche, Vorwoche-Referenz)
+//   - pauseused_  (pro Woche, einzelner Wert — zuletzt genutzte Pause für Zusammenfassung)
+//   - K.csets     (wochenunabhängig, Custom-Satzanzahl)
+//   - K.swap      (wochenunabhängig, Übungstausch-Anzeigename)
+//   - K.uni       (wochenunabhängig, Unilateral-Flag)
+//   - KrrEx       (wochenunabhängig, Rep-Range-Override)
+//   - epause_     (wochenunabhängig, individuelle Pausenzeit-Übersteuerung)
+//   - KsetType    (wochenunabhängig, aber pro Satz — Satztyp wie RIR/Dropsatz/Restpause/Giant-Set)
+// Jede Stelle, die Übungen im Plan umsortiert/löscht/einfügt (Plan-Builder UND Log-Reorder), MUSS
+// diese Funktion nutzen — sonst bleiben Daten am alten Index hängen und werden der falsch
+// verschobenen Übung zugeordnet (siehe Bugreport: Übung "doppelt" im Log, Gewichte verschieben sich
+// nicht mit; Ursache war konkret der hier zuerst fehlende K.swap-Eintrag).
+//
+// oldOrder/newOrder: Arrays stabiler Übungs-Kennungen (Session-IDs), in alter bzw. neuer Reihenfolge.
+// Ein Eintrag aus oldOrder, der in newOrder fehlt, wurde gelöscht — seine Daten werden bewusst NICHT
+// übernommen. Ein Eintrag in newOrder ohne Match in oldOrder ist neu hinzugefügt.
+//
+// Snapshot-Prinzip: liest IMMER zuerst ALLE benötigten Quellwerte vollständig, bevor irgendetwas
+// geschrieben wird. Ohne das würde z.B. bei A<->B das Schreiben von A bereits die Quellwerte von B
+// überschreiben, bevor B gelesen wurde (klassischer In-Place-Swap-Bug).
+// Verifiziert gegen 12 Testfälle (einfacher Tausch, Löschen zwischen Reorders, neue Übung mittendrin,
+// No-Change, 3er-Zyklus, komplette Neubelegung, mehrfache undefined-sids, Reorder+Löschen gemischt) —
+// siehe test_permutation2.js / test_integration.js.
+function migrateExerciseDataForReorder(pid,did,oldOrder,newOrder){
+  const MAX_SETS=20,MAX_AW=6; // großzügige Obergrenzen, decken alle realistisch vorkommenden Satz-/AW-Zahlen ab
+  const SET_FIELDS=['kg','wdh','kgL','kgR','wdhL','wdhR'];
+  const oldIdxOf={};
+  oldOrder.forEach((sid,i)=>{
+    if(sid==null)return; // fehlende/undefinierte sid (z.B. importierte Übung ohne Session-ID) NIE als Match-Schlüssel zulassen
+    oldIdxOf[sid]=i;
+  });
+
+  const moves=[];
+  newOrder.forEach((sid,newIdx)=>{
+    if(sid!=null&&oldIdxOf[sid]!==undefined){
+      const oldIdx=oldIdxOf[sid];
+      if(oldIdx!==newIdx)moves.push({from:oldIdx,to:newIdx}); // no-ops (from===to) übersprungen, spart Schreibvorgänge
+    }
+  });
+  if(!moves.length)return; // häufigster Fall: Speichern ohne tatsächliche Reihenfolgeänderung
+
+  function migrate(keyFn){
+    const snapshot=moves.map(({from})=>S.g(keyFn(from)));
+    moves.forEach(({to},mi)=>{
+      const val=snapshot[mi];
+      if(val===null)S.d(keyFn(to));else S.s(keyFn(to),val);
+    });
+    // Quell-Indizes, die selbst nicht auch Ziel eines (anderen) Moves sind, explizit leeren —
+    // das sind die tatsächlich gelöschten Übungen, deren Restdaten sonst stehen blieben.
+    moves.forEach(({from})=>{
+      if(!moves.some(m=>m.to===from))S.d(keyFn(from));
+    });
+  }
+
+  for(let w=1;w<=currentWeek;w++){
+    for(let si=0;si<MAX_SETS;si++){
+      SET_FIELDS.forEach(f=>migrate(ei=>K.set(pid,did,w,ei,si,f)));
+    }
+    for(let ai=0;ai<MAX_AW;ai++){
+      SET_FIELDS.forEach(f=>migrate(ei=>K.aw(pid,did,w,ei,ai,f)));
+    }
+    migrate(ei=>K.vw(pid,did,w,ei));
+    // Zuletzt genutzte Pausenzeit pro Übung pro Woche (für Zusammenfassungs-Durchschnitt) — ein
+    // einzelner Wert, keine Satz-Dimension, anders als K.set/K.aw.
+    migrate(ei=>'pauseused_'+pid+'_'+did+'_'+w+'_'+ei);
+  }
+  migrate(ei=>K.csets(pid,did,ei));
+  migrate(ei=>K.swap(pid,did,ei));
+  migrate(ei=>K.uni(pid,did,ei));
+  migrate(ei=>KrrEx(pid,did,ei));
+  // Individuelle Pausenzeit-Übersteuerung pro Übung (Fallback sonst auf day.pauseWork) — wochenunabhängig.
+  migrate(ei=>'epause_'+pid+'_'+did+'_'+ei);
+  // Satztyp (RIR/Dropsatz/Restpause/Giant-Set/...) ist pro Satz-Slot fix, aber wochenunabhängig
+  // (anders als K.set, das pro Woche variiert) — daher eigene Schleife ohne Wochen-Dimension.
+  for(let si=0;si<MAX_SETS;si++){
+    migrate(ei=>KsetType(pid,did,ei,si));
+  }
+}
+
 // ══ MUSCLE DIAGRAMS ═══════════════════════════════════
 function getMuscleColor(cat){
   const colors={
@@ -4390,6 +4475,15 @@ function buildWorkoutSummary(pid,did,week){
       +'</div>';
     body.appendChild(kcalCard);
   }
+
+  // Copy button — Zusammenfassung der kompletten Einheit (alle Übungen, Sätze, Gewichte) in
+  // Textform kopieren. Nutzt die bereits vorhandene copySummary()-Funktion, die hier zuvor nicht
+  // mehr aufgerufen wurde (Funktion existierte im Code, aber ohne UI-Anbindung).
+  const copyBtn=document.createElement('button');
+  copyBtn.style.cssText="width:100%;padding:13px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer;margin-top:10px;margin-bottom:4px;display:flex;align-items:center;justify-content:center;gap:7px";
+  copyBtn.textContent=t('copy');
+  copyBtn.addEventListener('click',()=>copySummary(plan,day,pid,did,week));
+  body.appendChild(copyBtn);
 
   // Close button
   const closeBtn=document.createElement('button');
@@ -6171,21 +6265,13 @@ function getSetCount(pid,did,ei,def){
   const v=S.g(K.csets(pid,did,ei));return v?Math.max(1,parseInt(v)||def):def;
 }
 
-// Prüft ob für eine Übung (Index ei) in einer bestimmten Woche bereits Satzdaten eingetragen wurden.
-// Wird benötigt, um Reorder-im-Log gegen Datenverwechslung abzusichern (Sätze hängen am Index ei, nicht an einer stabilen Übungs-ID).
-function hasSetDataInWeek(pid,did,week,ei,setCount){
-  const cnt=Math.max(setCount||3,10); // großzügig prüfen, auch bereits hinzugefügte Extra-Sätze
-  for(let si=0;si<cnt;si++){
-    const kg=parseFloat(S.g(K.set(pid,did,week,ei,si,'kg')))||0;
-    const wdh=parseInt(S.g(K.set(pid,did,week,ei,si,'wdh')))||0;
-    if(kg>0&&wdh>0)return true;
-  }
-  return false;
-}
-
-// Vertauscht zwei Übungen im Plan dauerhaft (wirkt auch auf künftige Wochen).
-// Sicherheitsregel: Tausch nur wenn KEINE der beiden Übungen in der aktuellen Woche bereits ausgefüllte Sätze hat —
-// sonst würden Satz-Daten (die am Array-Index hängen) der falschen Übung zugeordnet.
+// Vertauscht zwei Übungen im Log dauerhaft (wirkt auch auf künftige Wochen) UND migriert dabei
+// sämtliche an den Indizes hängenden Trainingsdaten (Sätze aller Wochen, Aufwärmsätze, Vorwoche-
+// Referenz, Custom-Satzanzahl, Übungstausch-Anzeigename, Rep-Range-Override, Unilateral-Flag) korrekt
+// mit. Nutzt dieselbe Migrationsfunktion wie der Plan-Builder-Reorder — eine Quelle der Wahrheit,
+// damit beide Reorder-Wege garantiert dasselbe (korrekte) Verhalten haben.
+// Frühere Version blockierte den Tausch, wenn eine der beiden Übungen schon Sätze hatte — das ist
+// nicht mehr nötig, weil die Daten jetzt aktiv migriert statt blockiert werden.
 function moveExInLog(pid,did,week,idxA,idxB){
   const plans=getPlans();
   const plan=plans.find(p=>p.id===pid);
@@ -6193,12 +6279,13 @@ function moveExInLog(pid,did,week,idxA,idxB){
   const day=plan.days.find(d=>d.id===did);
   if(!day||!day.exercises[idxA]||!day.exercises[idxB])return false;
 
-  const cntA=getSetCount(pid,did,idxA,day.exercises[idxA].sets||3);
-  const cntB=getSetCount(pid,did,idxB,day.exercises[idxB].sets||3);
-  if(hasSetDataInWeek(pid,did,week,idxA,cntA)||hasSetDataInWeek(pid,did,week,idxB,cntB)){
-    toast('⚠️ Tausch nicht möglich: eine der Übungen hat diese Woche schon Sätze');
-    return false;
-  }
+  // Stabile Kennung pro Position: für den simplen Zwei-Elemente-Tausch reicht der reine Index als
+  // "sid", da wir hier (anders als im Plan-Builder) keine Mischung aus Löschen/Hinzufügen zwischen
+  // mehreren Reorders haben — ein einzelner, isolierter Tausch genügt als oldOrder/newOrder-Paar.
+  const oldOrder=day.exercises.map((_,i)=>i);
+  const newOrder=oldOrder.slice();
+  newOrder[idxA]=idxB;newOrder[idxB]=idxA;
+  migrateExerciseDataForReorder(pid,did,oldOrder,newOrder);
 
   const tmp=day.exercises[idxA];day.exercises[idxA]=day.exercises[idxB];day.exercises[idxB]=tmp;
   savePlans(plans);
@@ -7125,11 +7212,24 @@ function openPlanBuilder(planId=null){
   const plans=getPlans();
   if(planId)createAutoBackup('Vor Planbearbeitung'); // deckt alle Tag-Edits dieser Session ab (Add/Archiv/Löschen wirken erst beim Speichern)
   _editPlan=planId?JSON.parse(JSON.stringify(plans.find(p=>p.id===planId)||{})):{id:'p_'+Date.now(),name:'',days:[]};
+  // Snapshot der ursprünglichen Reihenfolge pro Tag, als Liste stabiler Session-IDs (_sid).
+  // Grund: Reine Index-Paare ("idxA<->idxB wurde getauscht") werden ungültig, sobald in derselben
+  // Builder-Session ZUSÄTZLICH Übungen gelöscht oder hinzugefügt werden (verschiebt alle nachfolgenden
+  // Indizes) — siehe day.exercises.splice() beim Löschen. Mit einer stabilen ID pro Übungsobjekt lässt
+  // sich die nötige Migration am Ende als EINE korrekte Permutation berechnen, unabhängig davon, was
+  // dazwischen passiert ist.
+  _origExOrder={};
+  let _sidCounter=0;
+  (_editPlan.days||[]).forEach(day=>{
+    (day.exercises||[]).forEach(ex=>{ex._sid='s'+(_sidCounter++);});
+    _origExOrder[day.id]=day.exercises.map(ex=>ex._sid);
+  });
   document.getElementById('pb-tit').textContent=planId?'PLAN BEARBEITEN':'NEUER PLAN';
   document.getElementById('pb-name').value=_editPlan.name||'';
   renderPBDays();
   document.getElementById('pbov').classList.add('on');
 }
+let _origExOrder={}; // { dayId: [sid, sid, ...] } Reihenfolge beim Öffnen des Builders
 
 function moveDayInEditPlan(idxA,idxB){
   const arr=_editPlan.days;
@@ -7341,6 +7441,22 @@ function savePlan(){
   _editPlan.name=document.getElementById('pb-name').value.trim()||'Mein Plan';
   if(!activeDays(_editPlan).length){toast('⚠️ Mindestens einen aktiven Tag hinzufügen!');return;}
   const plans=getPlans();const idx=plans.findIndex(p=>p.id===_editPlan.id);
+  // Reorder-/Lösch-/Hinzufügen-Migration: vergleicht für jeden Tag die beim Öffnen gespeicherte
+  // Original-Reihenfolge (_origExOrder, Session-IDs) mit der finalen Reihenfolge bei Save und
+  // verschiebt alle pro-Index gespeicherten Trainingsdaten entsprechend. NUR bei einem bereits
+  // bestehenden Plan relevant — bei einem neuen Plan (idx<0) existieren unter dieser pid noch keine
+  // Daten in localStorage.
+  if(idx>=0){
+    (_editPlan.days||[]).forEach(day=>{
+      const oldOrder=_origExOrder[day.id];
+      if(!oldOrder)return; // Tag wurde in dieser Session neu angelegt, keine Altdaten zu migrieren
+      const newOrder=day.exercises.map(ex=>ex._sid);
+      migrateExerciseDataForReorder(_editPlan.id,day.id,oldOrder,newOrder);
+    });
+  }
+  // _sid war nur eine interne Session-Markierung für die Migration — nicht Teil des persistenten Datenmodells.
+  (_editPlan.days||[]).forEach(day=>day.exercises.forEach(ex=>delete ex._sid));
+  _origExOrder={};
   if(idx>=0)plans[idx]=_editPlan;else plans.push(_editPlan);
   savePlans(plans);setActivePlan(_editPlan.id);
   document.getElementById('pbov').classList.remove('on');
