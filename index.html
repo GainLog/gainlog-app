@@ -7195,11 +7195,15 @@ function renderKcalAnalysis(){
   // Geschätztes Tagesdefizit/-überschuss aus echtem Gewichtstrend (7700 kcal/kg), nicht aus TDEE-Formel.
   const estKcalPerDay=slopePerDay!=null?Math.round(slopePerDay*7700):null;
 
+  // "Wöchentliches Tempo" in kg/Woche — EINE Berechnung, die sowohl die Ampel-Bewertung als auch
+  // die separate Tempo-Anzeige speist. Bewusst nicht zweimal berechnet, damit beide Anzeigen
+  // niemals auseinanderlaufen können, falls die Formel später angepasst wird.
+  const weeklyKg=slopePerDay!=null?slopePerDay*7:null;
+
   // Trendampel: NUR auf geglättetem Trend (slopePerDay aus Regression), nicht auf Tageswerten —
   // sonst zeigt ein normaler Wassertag fälschlich "rot" obwohl der echte Trend passt.
   let trendColor='#94a3b8',trendLabel='Zu wenig Daten',trendIcon='⏳';
-  if(slopePerDay!=null){
-    const weeklyKg=slopePerDay*7;
+  if(weeklyKg!=null){
     const goal=USER.goal||'recomp';
     if(goal==='abnehmen'){
       if(weeklyKg<=-0.3&&weeklyKg>=-1.0){trendColor='#22c55e';trendLabel='Im Zielbereich';trendIcon='✅';}
@@ -7223,6 +7227,10 @@ function renderKcalAnalysis(){
 
   const fmtDiff=(v)=>v==null?'–':(v>0?'+':'')+v.toFixed(1)+' kg';
   const fmtKcal=(v)=>v==null?'–':(v>0?'+':'')+v+' kcal/Tag';
+  // "Aktuelles Tempo" zur Anzeige — nutzt dieselbe weeklyKg-Variable wie die Ampel oben (siehe
+  // Kommentar dort), nur gerundet für die Darstellung.
+  const weeklyRate=weeklyKg!=null?+weeklyKg.toFixed(2):null;
+  const fmtWeekly=(v)=>v==null?'–':(v>0?'+':'')+v.toFixed(2)+' kg/Woche';
 
   body.innerHTML=`
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
@@ -7239,7 +7247,7 @@ function renderKcalAnalysis(){
     <div style="background:var(--surface2);border-radius:12px;padding:12px 13px;margin-bottom:12px">
       <div style="font-size:10px;color:var(--muted);margin-bottom:4px">GESCHÄTZTES TAGESDEFIZIT/-ÜBERSCHUSS</div>
       <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${estKcalPerDay==null?'var(--muted)':(estKcalPerDay<0?'var(--green)':'var(--gold)')}">${fmtKcal(estKcalPerDay)}</div>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">Berechnet aus deinem echten Gewichtstrend (1kg ≈ 7700 kcal) — nicht aus deinem TDEE.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise, daher kann GainLog nur den Gewichtstrend nutzen, keinen vollständigen TDEE-Abgleich.)':''}</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">📊 Schätzung aus Gewichtsverlauf (keine Kalorienaufzeichnung) — 1kg ≈ 7700 kcal, kein TDEE-Abgleich.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise.)':''}</div>
     </div>
 
     <div style="display:flex;align-items:center;gap:10px;background:${trendColor}1a;border:1px solid ${trendColor}55;border-radius:12px;padding:11px 13px;margin-bottom:12px">
@@ -7250,10 +7258,17 @@ function renderKcalAnalysis(){
       </div>
     </div>
 
-    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">GEWICHTSPROGNOSE 30 TAGE</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">${forecast30!=null?'Lineare Hochrechnung deines aktuellen Trends. '+(lowDataWarning?'⚠️ Basis sind nur '+last30.length+' Einträge in 30 Tagen — bei so wenig Daten kann diese Prognose deutlich abweichen.':'') : 'Noch nicht genug Datenpunkte für eine Prognose.'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">AKTUELLES TEMPO</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${fmtWeekly(weeklyRate)}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Geglätteter Trend der letzten ${last30.length>=2?'30 Tage':'verfügbaren Daten'}.</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">PROGNOSE 30 TAGE</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">${forecast30!=null?(lowDataWarning?'⚠️ Nur '+last30.length+' Einträge — Prognose unsicher.':'Lineare Hochrechnung.') : 'Noch nicht genug Daten.'}</div>
+      </div>
     </div>`;
 }
 
