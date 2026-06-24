@@ -6691,7 +6691,7 @@ function runDuplicateExerciseDiagnosis(){
   body.innerHTML='';
 
   if(!findings.length){
-    body.innerHTML='<div style="text-align:center;padding:40px;color:var(--muted)">✅ Keine doppelten Übungsnamen gefunden.</div>';
+    body.innerHTML='<div style="text-align:center;padding:20px 10px;color:var(--muted);font-size:13px">✅ Kein exakter Namens-Duplikat im Datenmodell gefunden.<br><br>Falls im Log trotzdem etwas doppelt aussieht, kann das z.B. an unsichtbaren Zeichen-Unterschieden oder einem reinen Anzeigefehler liegen — siehe Rohliste unten.</div>';
   } else {
     const intro=document.createElement('div');
     intro.style.cssText='font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5';
@@ -6735,6 +6735,40 @@ function runDuplicateExerciseDiagnosis(){
       body.appendChild(card);
     });
   }
+
+  // ── ROHLISTEN-ANSICHT ──────────────────────────────────────
+  // Zeigt JEDE Übung jedes aktiven Tages mit Index und exaktem Namen in Anführungszeichen
+  // (samt Zeichenlänge), unabhängig vom exakten String-Vergleich oben. Hilft bei zwei Fällen,
+  // die der exakte Duplikat-Check NICHT erkennt:
+  //  1. Unsichtbare Zeichen-Unterschiede (Leerzeichen, geschützte Leerzeichen, etc.) — zwei
+  //     Namen sehen identisch aus, sind aber als String unterschiedlich lang.
+  //  2. Reiner Anzeigefehler im Log (nur 1 echter Eintrag im Array, aber im Log doppelt
+  //     gerendert) — hier zeigt die Rohliste dann klar nur EINEN Eintrag.
+  const rawHdr=document.createElement('div');
+  rawHdr.style.cssText='font-size:13px;font-weight:700;color:var(--text);margin:18px 0 10px;border-top:1px solid var(--border);padding-top:16px';
+  rawHdr.textContent='📋 Rohliste aller Übungen (zur Kontrolle)';
+  body.appendChild(rawHdr);
+
+  plans.forEach(plan=>{
+    (plan.days||[]).forEach(day=>{
+      if(day.archived)return;
+      if(!day.exercises||!day.exercises.length)return;
+      const dayCard=document.createElement('div');
+      dayCard.style.cssText='background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px';
+      const dTitle=document.createElement('div');
+      dTitle.style.cssText='font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px';
+      dTitle.textContent=plan.name+' · '+day.name;
+      dayCard.appendChild(dTitle);
+      day.exercises.forEach((ex,ei)=>{
+        const nm=ex.name||'(ohne Namen)';
+        const line=document.createElement('div');
+        line.style.cssText='font-size:11px;color:var(--text);padding:2px 0;font-family:monospace';
+        line.textContent='['+ei+'] "'+nm+'" (Länge: '+nm.length+')';
+        dayCard.appendChild(line);
+      });
+      body.appendChild(dayCard);
+    });
+  });
 
   const m=document.getElementById('dupeDiagMov');m.style.display='';m.classList.add('on');
 }
