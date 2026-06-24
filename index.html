@@ -6075,11 +6075,14 @@ function renderTrainingDayDetail(pid,did,week){
   tnDiv.appendChild(tnArea);
   ct.appendChild(tnDiv);
 
-  // Sticky Save
+  // Sticky Save + Kopieren
+  // Copy-Button hier (statt im Timer-Stop-Summary-Modal) platziert, weil der Nutzer ihn unabhängig
+  // vom Workout-Timer braucht — direkt neben "TRAINING SPEICHERN" im normalen Log-Ablauf.
   const stickyDiv=document.createElement('div');stickyDiv.className='sticky-save';
   const ts=S.g(K.saved(pid,did,week))||'';
   stickyDiv.innerHTML=`
     <button class="savebtn" id="texp-savebtn">${t('save')}</button>
+    <button id="texp-copybtn" style="width:100%;padding:11px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:700;cursor:pointer;margin-top:8px">${t('copy')}</button>
     <div class="savets" id="texp-savets">${ts?'✅ '+ts:''}</div>`;
   ct.appendChild(stickyDiv);
   document.getElementById('texp-savebtn')?.addEventListener('click',()=>{
@@ -6090,6 +6093,7 @@ function renderTrainingDayDetail(pid,did,week){
     document.getElementById('texp-savets').textContent='✅ '+s2;
     updateDash();toast(t('saved'));
   });
+  document.getElementById('texp-copybtn')?.addEventListener('click',()=>copySummary(plan,day,pid,did,week));
 
   // Auto-open first exercise if only one
   if(day.exercises.length===1){
