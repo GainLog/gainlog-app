@@ -1445,6 +1445,7 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
     <div class="si" style="cursor:pointer" id="p-export"><div class="sileft"><div class="siico">📤</div><div><div class="silbl">Backup exportieren</div><div class="sisub">JSON Datei speichern</div></div></div><div class="sival">→</div></div>
     <div class="si" style="cursor:pointer;border-color:var(--blue-bd)" id="p-import"><div class="sileft"><div class="siico">📥</div><div><div class="silbl" style="color:var(--blue2)">Backup importieren</div><div class="sisub">Daten wiederherstellen</div></div></div><div class="sival" style="color:var(--blue2)">→</div></div>
     <div class="si" style="cursor:pointer;border-color:rgba(245,158,11,.25)" id="p-diag-dupes"><div class="sileft"><div class="siico">🔍</div><div><div class="silbl" style="color:#f59e0b">Doppelte Übungen prüfen</div><div class="sisub">Findet gleichnamige Einträge im selben Tag</div></div></div><div class="sival" style="color:#f59e0b">→</div></div>
+    <div class="si" style="cursor:pointer;border-color:var(--green-bd,rgba(34,197,94,.25))" id="p-add-myworkout"><div class="sileft"><div class="siico">🏋️</div><div><div class="silbl" style="color:var(--green)">"My Workout" Pläne hinzufügen</div><div class="sisub">Fügt 3 individuelle Pläne hinzu (Mo/Mi/Fr)</div></div></div><div class="sival" style="color:var(--green)">→</div></div>
     <div class="si" style="cursor:pointer;border-color:rgba(239,68,68,.25)" id="p-reset"><div class="sileft"><div class="siico">🗑️</div><div><div class="silbl" style="color:var(--red)">Alle Daten löschen</div><div class="sisub">Nicht rückgängig!</div></div></div><div class="sival" style="color:var(--red)">!</div></div>
     <div class="si" style="cursor:pointer" id="p-info"><div class="sileft"><div class="siico">ℹ️</div><div><div class="silbl">Über GainLog</div><div class="sisub">Version, Kontakt & Nutzungsbedingungen</div></div></div><div class="sival">→</div></div>
   </div>
@@ -7367,6 +7368,129 @@ function exportDay(day){
   toast('⬇️ '+day.name+' exportiert!');
 }
 
+// ══ EINMALIGER IMPORT: "My Workout" + "My Workout 2" ══════
+// Fügt zwei vom Nutzer angefragte, individuell zusammengestellte Pläne zur bestehenden plans-Liste
+// HINZU (plans.push), OHNE bestehende Pläne zu überschreiben oder zu löschen — anders als
+// importFullBackup(), das ein komplettes Vollbackup ersetzt.
+// Beide Pläne nutzen dieselben 9 Übungen pro Tag (3x Ganzkörper-Split), nur mit unterschiedlicher
+// Trainingsphasen-Struktur: My Workout = Power/Hypertrophie/Hypertrophie, My Workout 2 =
+// Power/Hypertrophie/Pump. Tag-Namen ("Power Tag" etc.) lösen automatisch die passende
+// Rep-Range-Anzeige über getDefaultRRForDay() aus — kein manueller Override pro Übung nötig.
+function buildMyWorkoutPlanData(){
+  const baseDays={
+    power:[
+      {de:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {de:'Plate Loaded Schrägbankpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {de:'Iso Laterales Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
+      {de:'Latzug Maschine (Breit)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Bizepscurls (Kurzhanteln)',cat:'Arme',typ:'Kurzhantel',sets:2,type:'rir-mv',warmup:false},
+      {de:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv',warmup:false},
+      {de:'Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false}
+    ],
+    hypA:[
+      {de:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {de:'T-Bar Rudern',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',warmup:false},
+      {de:'Latzug Maschine Eng/Neutral',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Einarmiges Seitheben (Kabel)',cat:'Schulter',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {de:'Bizepscurls (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {de:'Trizepsdrücken (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {de:'Aduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
+    ],
+    hypB:[
+      {de:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {de:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {de:'Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
+      {de:'Rudern (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {de:'Butterfly',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Butterfly Reverse (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Überzüge (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Preacher Curl',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {de:'Abduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
+    ]
+  };
+  // Pump-Variante: höheres Wiederholungsvolumen, daher 1 Satz mehr bei nicht ohnehin schon
+  // maximal belasteten Übungen (Verbundübungen mit 4 Sätzen bleiben bei 3, um Gesamtvolumen/Erschöpfung
+  // an einem einzelnen Trainingstag nicht zu sprengen — siehe Hinweistext am Ende der Antwort).
+  const pumpDay=JSON.parse(JSON.stringify(baseDays.hypB)).map(ex=>({...ex,sets:ex.sets>=4?3:ex.sets+1}));
+
+  // "Ganzkörper Schwer" (6-10 statt 3-6 Reps): eigene, leicht REDUZIERTE Satzanzahl gegenüber dem
+  // expliziten Power-Tag (baseDays.power), weil bei 6-10 Reps die Belastung pro Satz niedriger ist
+  // als bei echter 3-6-Reps-Maximalkraftarbeit — das würde sonst die eigene Begründung (geringeres
+  // ZNS-/Gelenkrisiko bei 48) wieder aufheben, wenn unverändert dieselbe hohe Satzanzahl bliebe.
+  const heavyDay=JSON.parse(JSON.stringify(baseDays.power)).map(ex=>({...ex,sets:Math.max(2,ex.sets-1)}));
+
+  const restDay={name:'Rest',icon:'😴',type:'rest',exercises:[]};
+
+  return [
+    {
+      id:'p_myworkout_'+Date.now(),
+      name:'My Workout',
+      days:[
+        {name:'Power Tag',icon:'⚡',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.power))},
+        {...restDay},
+        {name:'Hypertrophie A',icon:'💪',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypA))},
+        {...restDay},
+        {name:'Hypertrophie B',icon:'🔥',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypB))},
+        {...restDay},
+        {...restDay}
+      ]
+    },
+    {
+      id:'p_myworkout2_'+(Date.now()+1), // +1 gegen ID-Kollision bei identischem Timestamp
+      name:'My Workout 2',
+      days:[
+        {name:'Power Tag',icon:'⚡',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.power))},
+        {...restDay},
+        {name:'Hypertrophie Tag',icon:'💪',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypA))},
+        {...restDay},
+        {name:'Pump Tag',icon:'🔥',type:'training',exercises:pumpDay},
+        {...restDay},
+        {...restDay}
+      ]
+    },
+    {
+      // My Workout 3: 3x Hypertrophie mit gestaffelten Rep-Bereichen statt explizitem Power-Tag —
+      // die von Claude empfohlene Variante (siehe Begründung in der Antwort): geringeres
+      // Verletzungsrisiko bei 48, ähnlicher Hypertrophie-Reiz über breiteres Rep-Spektrum,
+      // mehr Gesamtvolumen über die Woche (relevant für die Diät-Phase).
+      // rrMin/rrMax werden HIER direkt am Tag gesetzt (nicht über Namens-Erkennung in
+      // getDefaultRRForDay, die für alle 3 Tage denselben "hypert"-Bereich 8-12 liefern würde) —
+      // dieser day-level Override hat Vorrang und wird beim ersten Rendern automatisch in den
+      // wochenspezifischen dayrr_-Key geschrieben (siehe renderTrainingDayDetail).
+      id:'p_myworkout3_'+(Date.now()+2),
+      name:'My Workout 3',
+      days:[
+        {name:'Ganzkörper Schwer',icon:'🏋️',type:'training',rrMin:6,rrMax:10,exercises:heavyDay},
+        {...restDay},
+        {name:'Ganzkörper Mittel',icon:'💪',type:'training',rrMin:8,rrMax:12,exercises:JSON.parse(JSON.stringify(baseDays.hypA))},
+        {...restDay},
+        {name:'Ganzkörper Leicht',icon:'🔥',type:'training',rrMin:12,rrMax:15,exercises:JSON.parse(JSON.stringify(baseDays.hypB))},
+        {...restDay},
+        {...restDay}
+      ]
+    }
+  ];
+}
+
+function addMyWorkoutPlans(){
+  const plans=getPlans();
+  const existingNames=plans.map(p=>p.name);
+  const targetNames=['My Workout','My Workout 2','My Workout 3'];
+  const alreadyExisting=targetNames.filter(n=>existingNames.includes(n));
+  if(alreadyExisting.length){
+    if(!confirm('"'+alreadyExisting.join('", "')+'" existiert bereits in deiner Plan-Liste. Trotzdem ein ZWEITES Mal hinzufügen (führt zu doppelten Plan-Namen)?'))return;
+  }
+  const newPlans=buildMyWorkoutPlanData();
+  newPlans.forEach(p=>plans.push(p));
+  savePlans(plans);
+  toast('✅ "My Workout", "My Workout 2" und "My Workout 3" hinzugefügt');
+  renderPlanList();
+}
+
 function importDayFile(day,onDone){
   const inp=document.createElement('input');
   inp.type='file';inp.accept='.gainlogday';
@@ -9021,6 +9145,7 @@ addSiTouch('p-import',()=>{
   inp.click();
 });
 addSiTouch('p-diag-dupes',runDuplicateExerciseDiagnosis);
+addSiTouch('p-add-myworkout',addMyWorkoutPlans);
 addSiTouch('p-reset',confirmReset);
 
 // ══ NAV EVENTS ════════════════════════════════════════════
