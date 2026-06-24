@@ -7379,37 +7379,37 @@ function exportDay(day){
 function buildMyWorkoutPlanData(){
   const baseDays={
     power:[
-      {de:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
-      {de:'Plate Loaded Schrägbankpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
-      {de:'Iso Laterales Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
-      {de:'Latzug Maschine (Breit)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Bizepscurls (Kurzhanteln)',cat:'Arme',typ:'Kurzhantel',sets:2,type:'rir-mv',warmup:false},
-      {de:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv',warmup:false},
-      {de:'Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false}
+      {name:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {name:'Plate Loaded Schrägbankpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {name:'Iso Laterales Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
+      {name:'Latzug Maschine (Breit)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Bizepscurls (Kurzhanteln)',cat:'Arme',typ:'Kurzhantel',sets:2,type:'rir-mv',warmup:false},
+      {name:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:2,type:'rir-mv',warmup:false},
+      {name:'Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false}
     ],
     hypA:[
-      {de:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
-      {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
-      {de:'T-Bar Rudern',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',warmup:false},
-      {de:'Latzug Maschine Eng/Neutral',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Einarmiges Seitheben (Kabel)',cat:'Schulter',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
-      {de:'Bizepscurls (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
-      {de:'Trizepsdrücken (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
-      {de:'Aduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
+      {name:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {name:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {name:'T-Bar Rudern',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',warmup:false},
+      {name:'Latzug Maschine Eng/Neutral',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Einarmiges Seitheben (Kabel)',cat:'Schulter',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {name:'Bizepscurls (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {name:'Trizepsdrücken (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {name:'Aduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
     ],
     hypB:[
-      {de:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
-      {de:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
-      {de:'Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
-      {de:'Rudern (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
-      {de:'Butterfly',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Butterfly Reverse (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Überzüge (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Preacher Curl',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
-      {de:'Abduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
+      {name:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {name:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+      {name:'Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
+      {name:'Rudern (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+      {name:'Butterfly',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Butterfly Reverse (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Überzüge (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Preacher Curl',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+      {name:'Abduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
     ]
   };
   // Pump-Variante: höheres Wiederholungsvolumen, daher 1 Satz mehr bei nicht ohnehin schon
