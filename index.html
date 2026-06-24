@@ -7423,33 +7423,43 @@ function buildMyWorkoutPlanData(){
   // ZNS-/Gelenkrisiko bei 48) wieder aufheben, wenn unverändert dieselbe hohe Satzanzahl bliebe.
   const heavyDay=JSON.parse(JSON.stringify(baseDays.power)).map(ex=>({...ex,sets:Math.max(2,ex.sets-1)}));
 
-  const restDay={name:'Rest',icon:'😴',type:'rest',exercises:[]};
+  // WICHTIG: jeder Tag braucht eine EINDEUTIGE id (wie im Plan-Builder: id:'d_'+Date.now()).
+  // Ohne id ist d.id für ALLE Tage `undefined`, wodurch plan.days.find(d=>d.id===did) sowie
+  // jeder darauf basierende Storage-Key (K.swap, K.set, currentDayId, dayrr_ etc.) über ALLE
+  // Tage des Plans hinweg auf denselben Key kollabiert — das war die Ursache des
+  // "undefined"-Bugs im Log (currentDayId=day.id war literal der Wert undefined,
+  // d.id===did traf für JEDEN Tab gleichzeitig zu).
+  // Date.now() allein reicht als Basis nicht, da mehrere Tage in derselben Millisekunde
+  // erzeugt werden können -> zusätzlicher Zähler zur Eindeutigkeit.
+  let _dayIdSeq=0;
+  const mkRestDay=()=>({id:'d_'+Date.now()+'_'+(_dayIdSeq++),name:'Rest',icon:'😴',type:'rest',exercises:[]});
+  const mkDay=(props)=>({id:'d_'+Date.now()+'_'+(_dayIdSeq++),...props});
 
   return [
     {
       id:'p_myworkout_'+Date.now(),
       name:'My Workout',
       days:[
-        {name:'Power Tag',icon:'⚡',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.power))},
-        {...restDay},
-        {name:'Hypertrophie A',icon:'💪',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypA))},
-        {...restDay},
-        {name:'Hypertrophie B',icon:'🔥',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypB))},
-        {...restDay},
-        {...restDay}
+        mkDay({name:'Power Tag',icon:'⚡',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.power))}),
+        mkRestDay(),
+        mkDay({name:'Hypertrophie A',icon:'💪',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypA))}),
+        mkRestDay(),
+        mkDay({name:'Hypertrophie B',icon:'🔥',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypB))}),
+        mkRestDay(),
+        mkRestDay()
       ]
     },
     {
       id:'p_myworkout2_'+(Date.now()+1), // +1 gegen ID-Kollision bei identischem Timestamp
       name:'My Workout 2',
       days:[
-        {name:'Power Tag',icon:'⚡',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.power))},
-        {...restDay},
-        {name:'Hypertrophie Tag',icon:'💪',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypA))},
-        {...restDay},
-        {name:'Pump Tag',icon:'🔥',type:'training',exercises:pumpDay},
-        {...restDay},
-        {...restDay}
+        mkDay({name:'Power Tag',icon:'⚡',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.power))}),
+        mkRestDay(),
+        mkDay({name:'Hypertrophie Tag',icon:'💪',type:'training',exercises:JSON.parse(JSON.stringify(baseDays.hypA))}),
+        mkRestDay(),
+        mkDay({name:'Pump Tag',icon:'🔥',type:'training',exercises:pumpDay}),
+        mkRestDay(),
+        mkRestDay()
       ]
     },
     {
@@ -7464,13 +7474,13 @@ function buildMyWorkoutPlanData(){
       id:'p_myworkout3_'+(Date.now()+2),
       name:'My Workout 3',
       days:[
-        {name:'Ganzkörper Schwer',icon:'🏋️',type:'training',rrMin:6,rrMax:10,exercises:heavyDay},
-        {...restDay},
-        {name:'Ganzkörper Mittel',icon:'💪',type:'training',rrMin:8,rrMax:12,exercises:JSON.parse(JSON.stringify(baseDays.hypA))},
-        {...restDay},
-        {name:'Ganzkörper Leicht',icon:'🔥',type:'training',rrMin:12,rrMax:15,exercises:JSON.parse(JSON.stringify(baseDays.hypB))},
-        {...restDay},
-        {...restDay}
+        mkDay({name:'Ganzkörper Schwer',icon:'🏋️',type:'training',rrMin:6,rrMax:10,exercises:heavyDay}),
+        mkRestDay(),
+        mkDay({name:'Ganzkörper Mittel',icon:'💪',type:'training',rrMin:8,rrMax:12,exercises:JSON.parse(JSON.stringify(baseDays.hypA))}),
+        mkRestDay(),
+        mkDay({name:'Ganzkörper Leicht',icon:'🔥',type:'training',rrMin:12,rrMax:15,exercises:JSON.parse(JSON.stringify(baseDays.hypB))}),
+        mkRestDay(),
+        mkRestDay()
       ]
     }
   ];
