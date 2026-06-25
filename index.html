@@ -2411,7 +2411,7 @@ const DEFAULT_PLANS=[{
 }];
 
 function getPlans(){return S.gj('plans')||[]}
-function savePlans(plans){S.sj('plans',plans)}
+function savePlans(plans){return S.sj('plans',plans)}
 function getActivePlanId(){return S.g('active_plan')||null}
 function setActivePlan(id){S.s('active_plan',id)}
 function getActivePlan(){
@@ -7482,6 +7482,62 @@ function buildMyWorkoutPlanData(){
         mkRestDay(),
         mkRestDay()
       ]
+    },
+    {
+      // My Workout 4: A/B/C-Split (KEIN reines Ganzkörper-Triplet wie Plan 1-3), gebaut aus
+      // denselben 25 Übungen, aber mit aktiv berechneter Wochenvolumen-Verteilung pro
+      // Muskelgruppe statt einfacher Wiederholung der Power/HypA/HypB-Blöcke.
+      // GRUND: Plan 1-3 erzeugen 25 Sätze/Woche Beine und 27 Sätze/Woche Rücken (über dem
+      // evidenzbasierten 10-20-Satz-Zielfenster aus Schoenfeld et al. 2017), während Brust/Arme
+      // im Zielfenster lagen. My Workout 4 verteilt die Übungen neu: Beine 16, Rücken 21
+      // (knapp über 20, da Rücken aus vielen Einzelübungen mit Restüberlapp besteht — siehe
+      // Erklärung in der Antwort), Brust 15, Arme 15 Sätze/Woche.
+      // Schulter bewusst NUR auf 4 Sätze/Woche (2x Seitheben) begrenzt — explizite Vorgabe von
+      // Sven wegen Schulterproblemen; alle anderen Schulter-Übungen ausgeschlossen. Brust-
+      // Druckübungen (Brustpresse, Schrägbankpresse) sind laut Sven schulterseitig unproblematisch
+      // und bleiben daher im Plan.
+      // Jede Muskelgruppe bleibt an jedem Tag unter 8 direkten Sätzen (Grgic & Schoenfeld 2018:
+      // über 8 Sätzen/Muskel/Session überwiegt tendenziell Fatigue den Hypertrophie-Reiz).
+      // rrMin/rrMax: 8-12 an allen 3 Tagen (klassischer Hypertrophie-Bereich), kein Power-Tag,
+      // da Plan 1-3 bereits einen reinen Kraft-Fokus (Power Tag, Ganzkörper Schwer) abdecken —
+      // My Workout 4 ist gezielt die volumenkorrigierte Hypertrophie-Variante.
+      id:'p_myworkout4_'+(Date.now()+3),
+      name:'My Workout 4',
+      days:[
+        mkDay({name:'Tag A',icon:'💪',type:'training',rrMin:8,rrMax:12,exercises:[
+          {name:'Beinpresse (Plate Loaded)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true},
+          {name:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+          {name:'Latzug Maschine (Breit)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
+          {name:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Rudern (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+          {name:'Bizepscurls (Kurzhanteln)',cat:'Arme',typ:'Kurzhantel',sets:3,type:'rir-mv',warmup:false},
+          {name:'Trizepsdrücken (Maschine)',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:2,type:'rir-mv',warmup:false}
+        ]}),
+        mkRestDay(),
+        mkDay({name:'Tag B',icon:'🔥',type:'training',rrMin:8,rrMax:12,exercises:[
+          {name:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+          {name:'T-Bar Rudern',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',warmup:false},
+          {name:'Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Butterfly Reverse (Maschine)',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Bizepscurls (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+          {name:'Trizepsdrücken (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false},
+          {name:'Einarmiges Seitheben (Kabel)',cat:'Schulter',typ:'Kabel',sets:2,type:'rir-mv',warmup:false}
+        ]}),
+        mkRestDay(),
+        mkDay({name:'Tag C',icon:'⚡',type:'training',rrMin:8,rrMax:12,exercises:[
+          {name:'Aduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false},
+          {name:'Abduktoren (Maschine)',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',warmup:false},
+          {name:'Plate Loaded Schrägbankpresse',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',warmup:true},
+          {name:'Butterfly',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Iso Laterales Rudern (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',warmup:false},
+          {name:'Latzug Maschine Eng/Neutral',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false},
+          {name:'Preacher Curl',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',warmup:false}
+        ]}),
+        mkRestDay(),
+        mkRestDay()
+      ]
     }
   ];
 }
@@ -7489,15 +7545,22 @@ function buildMyWorkoutPlanData(){
 function addMyWorkoutPlans(){
   const plans=getPlans();
   const existingNames=plans.map(p=>p.name);
-  const targetNames=['My Workout','My Workout 2','My Workout 3'];
+  const targetNames=['My Workout','My Workout 2','My Workout 3','My Workout 4'];
   const alreadyExisting=targetNames.filter(n=>existingNames.includes(n));
   if(alreadyExisting.length){
     if(!confirm('"'+alreadyExisting.join('", "')+'" existiert bereits in deiner Plan-Liste. Trotzdem ein ZWEITES Mal hinzufügen (führt zu doppelten Plan-Namen)?'))return;
   }
   const newPlans=buildMyWorkoutPlanData();
   newPlans.forEach(p=>plans.push(p));
-  savePlans(plans);
-  toast('✅ "My Workout", "My Workout 2" und "My Workout 3" hinzugefügt');
+  // Erfolgs-Check nachgerüstet: _quotaSafeWrite (über savePlans->S.sj) gibt bei Fehlern false
+  // zurück, ohne eine Exception zu werfen. Vorher wurde der Erfolgs-Toast unconditional gezeigt,
+  // auch wenn das Schreiben fehlschlug (z.B. bei vollem Storage-Quota mit unerwartetem Fehlertyp).
+  const writeResult=savePlans(plans);
+  if(writeResult===false){
+    toast('⚠️ Speichern fehlgeschlagen – Speicher evtl. voll. Bitte Speicherplatz prüfen.');
+    return;
+  }
+  toast('✅ "My Workout", "My Workout 2", "My Workout 3" und "My Workout 4" hinzugefügt');
   renderPlanList();
 }
 
