@@ -51,7 +51,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .hdr{position:sticky;top:0;z-index:100;background:rgba(0,0,0,.95);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:14px 16px 0}
 body.light .hdr{background:rgba(244,244,245,.95)}
 .htitle{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:2px;margin-bottom:12px}
-.hdr-logo{width:18px;height:18px;flex-shrink:0;vertical-align:middle;border-radius:4px}
+.hdr-logo{width:18px;height:18px;flex-shrink:0;vertical-align:middle;border-radius:4px;object-fit:contain}
 .week-row{display:flex;align-items:center;gap:12px;margin-bottom:12px}
 .wbtn{width:34px;height:34px;border-radius:50%;border:1px solid var(--border2);background:var(--surface2);color:var(--text);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s}
 .wbtn:active{transform:scale(.9)}
@@ -1446,7 +1446,8 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
     <div class="si" style="cursor:pointer" id="p-export"><div class="sileft"><div class="siico">📤</div><div><div class="silbl">Backup exportieren</div><div class="sisub">JSON Datei speichern</div></div></div><div class="sival">→</div></div>
     <div class="si" style="cursor:pointer;border-color:var(--blue-bd)" id="p-import"><div class="sileft"><div class="siico">📥</div><div><div class="silbl" style="color:var(--blue2)">Backup importieren</div><div class="sisub">Daten wiederherstellen</div></div></div><div class="sival" style="color:var(--blue2)">→</div></div>
     <div class="si" style="cursor:pointer;border-color:rgba(245,158,11,.25)" id="p-diag-dupes"><div class="sileft"><div class="siico">🔍</div><div><div class="silbl" style="color:#f59e0b">Doppelte Übungen prüfen</div><div class="sisub">Findet gleichnamige Einträge im selben Tag</div></div></div><div class="sival" style="color:#f59e0b">→</div></div>
-    <div class="si" style="cursor:pointer;border-color:var(--green-bd,rgba(34,197,94,.25))" id="p-add-myworkout"><div class="sileft"><div class="siico">🏋️</div><div><div class="silbl" style="color:var(--green)">"My Workout" Pläne hinzufügen</div><div class="sisub">Fügt 3 individuelle Pläne hinzu (Mo/Mi/Fr)</div></div></div><div class="sival" style="color:var(--green)">→</div></div>
+    <div class="si" style="cursor:pointer;border-color:var(--green-bd,rgba(34,197,94,.25))" id="p-add-myworkout"><div class="sileft"><div class="siico">🏋️</div><div><div class="silbl" style="color:var(--green)">"My Workout" Pläne hinzufügen</div><div class="sisub">Fügt 5 individuelle Pläne hinzu (Mo/Mi/Fr/Sa)</div></div></div><div class="sival" style="color:var(--green)">→</div></div>
+    <div class="si" style="cursor:pointer;border-color:rgba(245,158,11,.25)" id="p-reset-prs"><div class="sileft"><div class="siico">🏆</div><div><div class="silbl" style="color:#f59e0b">Alle PRs zurücksetzen</div><div class="sisub">Log bleibt erhalten, nur Bestleistungen werden gelöscht</div></div></div><div class="sival" style="color:#f59e0b">!</div></div>
     <div class="si" style="cursor:pointer;border-color:rgba(239,68,68,.25)" id="p-reset"><div class="sileft"><div class="siico">🗑️</div><div><div class="silbl" style="color:var(--red)">Alle Daten löschen</div><div class="sisub">Nicht rückgängig!</div></div></div><div class="sival" style="color:var(--red)">!</div></div>
     <div class="si" style="cursor:pointer" id="p-info"><div class="sileft"><div class="siico">ℹ️</div><div><div class="silbl">Über GainLog</div><div class="sisub">Version, Kontakt & Nutzungsbedingungen</div></div></div><div class="sival">→</div></div>
   </div>
@@ -8364,7 +8365,7 @@ function loadProfilPage(){
 
 // ══ PR HALL OF FAME ════════════════════════════════════════
 function getPRs(){return S.gj('prs')||{};}
-function savePRs(prs){S.sj('prs',prs);}
+function savePRs(prs){return S.sj('prs',prs);}
 
 // Called by checkPR() when a workout PR is detected — returns true if it's actually new
 function savePRFromWorkout(exName,kg,wdh){
@@ -8569,6 +8570,33 @@ function confirmReset(){
     ov.remove();
     doReset();
   });
+}
+// PRs gezielt zurücksetzen, OHNE die übrigen Trainingsdaten (Pläne, Log, Backup) zu berühren —
+// bewusst eine separate, schwächere Bestätigung/Farbe (Amber statt Rot) als "Alle Daten löschen",
+// da diese Aktion deutlich weniger destruktiv ist (nur gl_prs).
+function confirmResetPRs(){
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9998;display:flex;align-items:center;justify-content:center;padding:20px';
+  ov.innerHTML='<div style="background:#111;border:1px solid rgba(245,158,11,.3);border-radius:16px;padding:24px;max-width:320px;width:100%;text-align:center">'
+    +'<div style="font-size:36px;margin-bottom:12px">🏆</div>'
+    +'<div style="font-family:Bebas Neue,sans-serif;font-size:20px;color:#f59e0b;margin-bottom:8px;letter-spacing:1px">ALLE PRs ZURÜCKSETZEN?</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:20px;line-height:1.6">Deine komplette PR Hall of Fame wird gelöscht. Dein Trainingslog und alle Sätze bleiben erhalten — nur die gespeicherten Bestleistungen werden entfernt.</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button id="reset-prs-cancel" style="flex:1;padding:12px;border-radius:10px;border:1px solid #333;background:#1a1a1a;color:#888;font-family:Bebas Neue,sans-serif;font-size:15px;cursor:pointer">ABBRECHEN</button>'
+    +'<button id="reset-prs-confirm" style="flex:1;padding:12px;border-radius:10px;border:none;background:#f59e0b;color:#000;font-family:Bebas Neue,sans-serif;font-size:15px;cursor:pointer">ZURÜCKSETZEN</button>'
+    +'</div></div>';
+  document.body.appendChild(ov);
+  document.getElementById('reset-prs-cancel')?.addEventListener('click',()=>ov.remove());
+  document.getElementById('reset-prs-confirm')?.addEventListener('click',()=>{
+    ov.remove();
+    doResetPRs();
+  });
+}
+function doResetPRs(){
+  const result=savePRs({});
+  if(result===false){toast('⚠️ Zurücksetzen fehlgeschlagen');return;}
+  renderPRSection();
+  toast('🏆 Alle PRs zurückgesetzt');
 }
 function doReset(){
   const keys=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(k&&k.startsWith('gl_'))keys.push(k);}
@@ -9247,7 +9275,15 @@ document.getElementById('pav-inp')?.addEventListener('change',function(){
   const file=this.files[0];if(!file)return;
   const reader=new FileReader();reader.onload=e=>{
     const img2=new Image();img2.onload=()=>{
-      const cv=document.createElement('canvas');cv.width=200;cv.height=200;cv.getContext('2d').drawImage(img2,0,0,200,200);
+      // Zentrierten quadratischen Ausschnitt nehmen (wie CSS object-fit:cover), statt das
+      // Originalbild unabhängig auf 200x200 zu strecken — sonst wird jedes nicht-quadratische
+      // Foto (praktisch jedes Handyfoto) seitlich verzerrt, bevor object-fit:cover beim
+      // Anzeigen überhaupt greifen kann (die Verzerrung steckt dann schon in den Pixeln).
+      const sw=img2.naturalWidth||img2.width,sh=img2.naturalHeight||img2.height;
+      const side=Math.min(sw,sh);
+      const sx=(sw-side)/2,sy=(sh-side)/2;
+      const cv=document.createElement('canvas');cv.width=200;cv.height=200;
+      cv.getContext('2d').drawImage(img2,sx,sy,side,side,0,0,200,200);
       USER.photo=cv.toDataURL('image/jpeg',.7);saveUser();loadProfilPhoto();toast('✅ Foto gespeichert');
     };img2.src=e.target.result;};reader.readAsDataURL(file);this.value='';
 });
@@ -9296,6 +9332,7 @@ addSiTouch('p-import',()=>{
 addSiTouch('p-diag-dupes',runDuplicateExerciseDiagnosis);
 addSiTouch('p-add-myworkout',addMyWorkoutPlans);
 addSiTouch('p-reset',confirmReset);
+addSiTouch('p-reset-prs',confirmResetPRs);
 
 // ══ NAV EVENTS ════════════════════════════════════════════
 function openWeekPicker(){
