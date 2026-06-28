@@ -7344,7 +7344,7 @@ function renderKcalAnalysis(){
     }
   }
 
-  // Prognose 30 Tage: lineare Fortschreibung des 30-Tage-Trends. Bewusst MIT Unsicherheits-Hinweis,
+  // Projektion 30 Tage: lineare Fortschreibung des 30-Tage-Trends. Bewusst MIT Unsicherheits-Hinweis,
   // weil eine lineare Extrapolation über einen vollen Monat bei nur wenigen Datenpunkten leicht danebenliegt.
   const forecast30=slopePerDay!=null?+(latest.kg+slopePerDay*30).toFixed(1):null;
   const lowDataWarning=last30.length<4; // <4 Punkte über 30 Tage = Prognose mit Vorsicht zu genießen
@@ -7357,7 +7357,21 @@ function renderKcalAnalysis(){
   const fmtWeekly=(v)=>v==null?'–':(v>0?'+':'')+v.toFixed(2)+' kg/Woche';
 
   body.innerHTML=`
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:10px;background:${trendColor}1a;border:1px solid ${trendColor}55;border-radius:12px;padding:11px 13px;margin-bottom:10px">
+      <div style="font-size:20px">${trendIcon}</div>
+      <div>
+        <div style="font-weight:700;font-size:13px;color:${trendColor}">${trendLabel}</div>
+        <div style="font-size:10.5px;color:var(--muted)">Trendampel · Basis: geglätteter Verlauf, nicht Tageswerte</div>
+      </div>
+    </div>
+
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px;margin-bottom:10px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">AKTUELLES TEMPO</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text)">${fmtWeekly(weeklyRate)}</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Geglätteter Trend der letzten ${last30.length>=2?'30 Tage':'verfügbaren Daten'}.</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
       <div style="background:var(--surface2);border-radius:12px;padding:10px 12px">
         <div style="font-size:10px;color:var(--muted);margin-bottom:3px">GEWICHT 7 TAGE</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${diff7==null?'var(--muted)':(diff7<=0?'var(--green)':'var(--red)')}">${fmtDiff(diff7)}</div>
@@ -7368,31 +7382,20 @@ function renderKcalAnalysis(){
       </div>
     </div>
 
-    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px;margin-bottom:12px">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">GESCHÄTZTES TAGESDEFIZIT/-ÜBERSCHUSS</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${estKcalPerDay==null?'var(--muted)':(estKcalPerDay<0?'var(--green)':'var(--gold)')}">${fmtKcal(estKcalPerDay)}</div>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">📊 Schätzung aus Gewichtsverlauf (keine Kalorienaufzeichnung) — 1kg ≈ 7700 kcal, kein TDEE-Abgleich.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise.)':''}</div>
+    <div style="background:var(--surface2);border-radius:12px;padding:10px 13px;margin-bottom:10px;opacity:.75">
+      <div style="font-size:9.5px;color:var(--muted);margin-bottom:3px">GESCHÄTZTES TAGESDEFIZIT/-ÜBERSCHUSS</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${estKcalPerDay==null?'var(--muted)':(estKcalPerDay<0?'var(--green)':'var(--gold)')}">${fmtKcal(estKcalPerDay)}</div>
+      <div style="font-size:9.5px;color:var(--muted);margin-top:4px;line-height:1.5">📊 Schätzung aus Gewichtsverlauf (keine Kalorienaufzeichnung) — 1kg ≈ 7700 kcal, kein TDEE-Abgleich.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise.)':''}</div>
     </div>
 
-    <div style="display:flex;align-items:center;gap:10px;background:${trendColor}1a;border:1px solid ${trendColor}55;border-radius:12px;padding:11px 13px;margin-bottom:12px">
-      <div style="font-size:20px">${trendIcon}</div>
-      <div>
-        <div style="font-weight:700;font-size:13px;color:${trendColor}">${trendLabel}</div>
-        <div style="font-size:10.5px;color:var(--muted)">Trendampel · Basis: geglätteter Verlauf, nicht Tageswerte</div>
-      </div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">AKTUELLES TEMPO</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${fmtWeekly(weeklyRate)}</div>
-        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Geglätteter Trend der letzten ${last30.length>=2?'30 Tage':'verfügbaren Daten'}.</div>
-      </div>
-      <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
-        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">PROGNOSE 30 TAGE</div>
-        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
-        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">${forecast30!=null?(lowDataWarning?'⚠️ Nur '+last30.length+' Einträge — Prognose unsicher.':'Lineare Hochrechnung.') : 'Noch nicht genug Daten.'}</div>
-      </div>
+    <div style="background:${lowDataWarning&&forecast30!=null?'#f59e0b1a':'var(--surface2)'};border:${lowDataWarning&&forecast30!=null?'1px solid #f59e0b55':'none'};border-radius:12px;padding:12px 13px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">PROJEKTION 30 TAGE</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
+      ${forecast30!=null
+        ?(lowDataWarning
+          ?`<div style="font-size:11.5px;color:#f59e0b;font-weight:700;margin-top:5px;line-height:1.4">⚠️ Nur ${last30.length} Einträge in den letzten 30 Tagen — Projektion noch ungenau.</div>`
+          :`<div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Lineare Hochrechnung.</div>`)
+        :`<div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Noch nicht genug Daten.</div>`}
     </div>`;
 }
 
