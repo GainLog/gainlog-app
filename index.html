@@ -4038,12 +4038,27 @@ document.addEventListener('visibilitychange',()=>{
     // anfordern, damit der Bildschirm beim erneuten Reinschauen nicht direkt wieder einschläft.
     if(_ti&&!_wakeLock){acquireWakeLock();}
     if(typeof _timerEndTs!=='undefined'&&_timerEndTs&&Date.now()>=_timerEndTs){
-      setTimeout(()=>{
-        unlockAudio();
-        const ac=getAudioCtx();
-        if(ac&&ac.state==='suspended'){ac.resume().then(()=>_timerFire()).catch(()=>_timerFire());}
-        else _timerFire();
-      },200);
+      // BUGFIX: Vorher gab es HIER keine Obergrenze, wie lange der Timer schon überfällig ist.
+      // Wenn die PWA von iOS nur in den Hintergrund geschickt (nicht beendet) wurde und ein
+      // _timerEndTs von einer früheren Pause noch im Speicher hing, feuerte der Klingelton beim
+      // nächsten Öffnen der App sofort — auch nach Stunden, wo die Pause längst irrelevant ist
+      // (genau das Symptom "Ton klingelt sofort beim App-Start, ohne dass eine Pause lief").
+      // Jetzt: Catch-up-Ton nur innerhalb einer kurzen Kulanzfrist, sonst nur still aufräumen.
+      const overdueMs=Date.now()-_timerEndTs;
+      const MAX_CATCHUP_MS=5*60*1000; // 5 Minuten Kulanz
+      if(overdueMs<=MAX_CATCHUP_MS){
+        setTimeout(()=>{
+          unlockAudio();
+          const ac=getAudioCtx();
+          if(ac&&ac.state==='suspended'){ac.resume().then(()=>_timerFire()).catch(()=>_timerFire());}
+          else _timerFire();
+        },200);
+      } else {
+        clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
+        releaseWakeLock();
+        const te=document.getElementById('tov');
+        if(te){te.classList.remove('on');te.style.display='';}
+      }
     }
   }
 });
@@ -4123,8 +4138,21 @@ function startTimer(secs,lbl){
   if(!secs||secs<=0)return;
   unlockAudio();
   acquireWakeLock();
-  const ac=getAudioCtx();
-  if(ac&&ac.state==='suspended')ac.resume();
+  // Bewusst bei JEDEM Pausenstart einen NEUEN AudioContext anlegen, statt den über die ganze
+  // Session gecachten wiederzuverwenden. Grund: iOS kann einen bestehenden Context nach
+  // Bildschirmsperre/Hintergrund in einen Zustand versetzen, der laut .state weiterhin
+  // "running" ist, aber tatsächlich keinen Ton mehr ausgibt (bekannter WebKit-Bug, per JS
+  // nicht zuverlässig erkennbar — genau das passt zum Symptom "Ton kommt in der Pause gar
+  // nicht mehr"). Ein frischer Context pro Pause ist unkritisch teuer (Millisekunden) und
+  // braucht nach dem ersten Unlock der Seite auch keinen erneuten Silent-Buffer-Trick, weil
+  // die Autoplay-Freigabe seitenweit gilt, nicht pro Context.
+  if(_audioCtx&&_audioCtx.state!=='closed'){try{_audioCtx.close();}catch(e){}}
+  let ac=null;
+  try{
+    ac=new(window.AudioContext||window.webkitAudioContext)();
+    _audioCtx=ac;_audioUnlocked=true;
+  }catch(e){}
+  if(ac&&ac.state==='suspended')ac.resume().catch(()=>{});
   if(ac){
     try{
       const buf=ac.createBuffer(1,1,22050);
