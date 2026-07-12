@@ -2423,16 +2423,6 @@ function getActivePlan(){
   return plans.find(p=>p.id===id)||plans[0]||null;
 }
 
-// ══ EINDEUTIGE DAY-IDs ════════════════════════════════════
-// ZENTRALER Generator für Tag-IDs. Date.now() ALLEINE reicht nicht, da mehrere Tage
-// in derselben Millisekunde entstehen können (schnelle Klicks, Bulk-Erzeugung mehrerer
-// Pläne) — genau das war die Root Cause des "undefined"-Bugs (id war für mehrere Tage
-// gleich/undefined, wodurch plan.days.find(d=>d.id===did) über alle Tage hinweg kollidierte).
-// JEDE Stelle, die ein Day-Objekt für plans[] baut, MUSS newDayId() verwenden statt
-// roh 'd_'+Date.now() inline zu schreiben.
-let _dayIdSeq=0;
-function newDayId(){return 'd_'+Date.now()+'_'+(_dayIdSeq++);}
-
 // ══ TAGES-AUFLÖSUNG (Rename/Archiv-sicher) ════════════════════════
 // Löst Name/Icon eines Trainingstags IMMER live über die Plan-Struktur auf,
 // statt auf eingefrorene Snapshots (z.B. in workout_history) zu vertrauen.
@@ -2459,32 +2449,16 @@ function resetPlanWeeks(planId){
   const plan=getPlans().find(p=>p.id===planId);
   if(!plan)return 0;
   const dayIds=plan.days.map(d=>d.id).filter(Boolean);
-  // ACHTUNG — zwei unterschiedliche Key-Formate im Storage:
-  //  - die meisten Wochen-Keys:  prefix_{pid}_{did}_w{week}...   (literales "w" vor der Wochenzahl,
-  //    z.B. set_, sv_, crd_ — siehe K.set/K.saved/K.cardio etc.)
-  //  - pauseused_ (Sonderfall): pauseused_{pid}_{did}_{week}_{ei}  — OHNE "w" vor der Wochenzahl.
-  // Bug (gefixt): vorher wurde für ALLE Prefixe derselbe "_w"-Substring-Match verwendet. Da
-  // pauseused_-Keys nie ein "_w" vor der Wochenzahl enthalten, wurden sie NIE gelöscht, obwohl
-  // sie hier explizit aufgelistet waren — der Reset-Counter zeigte also unbemerkt zu wenig an,
-  // und alte Pausen-Werte blieben für immer im Storage.
-  const wFormatPrefixes=['set_','aw_','vw_','sv_','crd_','tm_','lm_','kmh_','stg_','extra_','wstart_','wend_','wpause_'];
-  const noWFormatPrefixes=['pauseused_'];
+  const weekPrefixes=['set_','aw_','vw_','sv_','crd_','tm_','lm_','kmh_','stg_','extra_','wstart_','wend_','wpause_','pauseused_'];
   const toDelete=[];
   for(let i=0;i<localStorage.length;i++){
     const fullKey=localStorage.key(i);
     if(!fullKey||!fullKey.startsWith('gl_'))continue;
     const key=fullKey.slice(3);
-    const isWFormat=wFormatPrefixes.some(p=>key.startsWith(p));
-    const isNoWFormat=!isWFormat&&noWFormatPrefixes.some(p=>key.startsWith(p));
-    if(!isWFormat&&!isNoWFormat)continue;
-    const matches=dayIds.some(did=>{
-      if(isWFormat)return key.includes('_'+planId+'_'+did+'_w');
-      // pauseused_{pid}_{did}_{week}_{ei}: nach "_pid_did_" muss direkt die Wochenzahl folgen
-      const marker='_'+planId+'_'+did+'_';
-      const idx=key.indexOf(marker);
-      return idx!==-1&&/^\d/.test(key.slice(idx+marker.length));
-    });
-    if(matches)toDelete.push(fullKey);
+    if(!weekPrefixes.some(p=>key.startsWith(p)))continue;
+    if(dayIds.some(did=>key.includes('_'+planId+'_'+did+'_w'))){
+      toDelete.push(fullKey);
+    }
   }
   // Erst sammeln, dann löschen — niemals während des Iterierens über localStorage löschen,
   // da die Schlüssel-Reihenfolge implementierungsabhängig ist und sich beim Entfernen
@@ -2495,25 +2469,6 @@ function resetPlanWeeks(planId){
     S.s('currentWeek','1');
   }
   return toDelete.length;
-}
-
-// Selbstheilung für Pläne, die VOR dem mkDay/mkRestDay-Fix erzeugt wurden und daher Tage
-// mit id===undefined enthalten (Root Cause des "undefined"-Bugs im Log). Der Fix in
-// buildMyWorkoutPlanData()/newDayId() verhindert das Problem nur für NEU erzeugte Tage —
-// bereits gespeicherte Plan-Instanzen blieben sonst dauerhaft kaputt, bis sie manuell im
-// Plan-Builder gelöscht und neu angelegt würden. Läuft bei jedem Start (kein einmaliges
-// Flag), da rein additiv/idempotent: schreibt nur, wenn tatsächlich eine fehlende id
-// gefunden wurde, und vergibt dafür dieselbe kollisionssichere newDayId().
-function repairMissingDayIdsV1(){
-  const plans=getPlans();
-  let changed=false;
-  plans.forEach(plan=>{
-    (plan.days||[]).forEach(day=>{
-      if(!day.id){day.id=newDayId();changed=true;}
-    });
-  });
-  if(changed)savePlans(plans);
-  return changed;
 }
 function firstActiveDay(plan){const ad=activeDays(plan);return ad.length?ad[0]:null;}
 // Prüft, ob für einen Tag jemals ein Training gespeichert wurde (Historie ODER Done-Marker).
@@ -3977,14 +3932,9 @@ function loadCurrentDay(){try{return localStorage.getItem('gl_current_day');}cat
 let _ti=null,_tt=0,_tl=0; // pause timer state
 let _audioCtx=null;
 let _audioUnlocked=false;
-let _wakeLock=null; // Screen Wake Lock waehrend des Pausentimers
 
 function unlockAudio(){
-  // _audioUnlocked ist ein Session-weites Flag. Wenn iOS den Context nach langer
-  // Bildschirmsperre/Hintergrundzeit hart auf 'closed' setzt (nicht nur 'suspended'),
-  // durfte dieses Flag bisher JEDEN weiteren Unlock-Versuch blockieren -> Ton blieb für
-  // den Rest der Session stumm. Jetzt: Flag nur respektieren, wenn der Context noch lebt.
-  if(_audioUnlocked&&_audioCtx&&_audioCtx.state!=='closed')return;
+  if(_audioUnlocked)return;
   try{
     const ac=new(window.AudioContext||window.webkitAudioContext)();
     // Play silent buffer to unlock
@@ -3998,31 +3948,10 @@ function unlockAudio(){
 }
 
 function getAudioCtx(){
-  if(!_audioCtx||_audioCtx.state==='closed'){
+  if(!_audioCtx){
     try{_audioCtx=new(window.AudioContext||window.webkitAudioContext)();}catch(e){}
   }
   return _audioCtx;
-}
-
-// ══ SCREEN WAKE LOCK ════════════════════════════════════════
-// Verhindert, dass der Bildschirm WÄHREND DES PAUSENTIMERS einschläft. Das ist der
-// häufigste praktische Grund, warum der Pausen-Ton "manchmal nicht kommt": sperrt das
-// Telefon den Bildschirm, wird der Tab in den Hintergrund geschoben, setInterval wird vom
-// Browser gedrosselt/pausiert, und der AudioContext kann vom System suspendiert/geschlossen
-// werden. Ohne Bildschirmsperre läuft der normale Vordergrund-Pfad einfach zuverlässig durch.
-// Feature-Detection: auf älteren Browsern/iOS-Versionen ohne Wake-Lock-Support passiert
-// einfach nichts (catch), der Rest der App funktioniert unverändert weiter.
-async function acquireWakeLock(){
-  try{
-    if('wakeLock' in navigator){
-      _wakeLock=await navigator.wakeLock.request('screen');
-      _wakeLock.addEventListener('release',()=>{_wakeLock=null;});
-    }
-  }catch(e){_wakeLock=null;}
-}
-function releaseWakeLock(){
-  try{_wakeLock&&_wakeLock.release();}catch(e){}
-  _wakeLock=null;
 }
 
 // Unlock on any touch
@@ -4033,32 +3962,13 @@ document.addEventListener('click',unlockAudio,{once:false,passive:true});
 document.addEventListener('visibilitychange',()=>{
   if(!document.hidden){
     if(_audioCtx&&_audioCtx.state==='suspended'){_audioCtx.resume().catch(()=>{});}
-    // Wake Lock wird vom Browser automatisch freigegeben, sobald der Tab in den Hintergrund
-    // geht, und NICHT automatisch wieder angefordert. Läuft der Pausentimer noch, hier erneut
-    // anfordern, damit der Bildschirm beim erneuten Reinschauen nicht direkt wieder einschläft.
-    if(_ti&&!_wakeLock){acquireWakeLock();}
     if(typeof _timerEndTs!=='undefined'&&_timerEndTs&&Date.now()>=_timerEndTs){
-      // BUGFIX: Vorher gab es HIER keine Obergrenze, wie lange der Timer schon überfällig ist.
-      // Wenn die PWA von iOS nur in den Hintergrund geschickt (nicht beendet) wurde und ein
-      // _timerEndTs von einer früheren Pause noch im Speicher hing, feuerte der Klingelton beim
-      // nächsten Öffnen der App sofort — auch nach Stunden, wo die Pause längst irrelevant ist
-      // (genau das Symptom "Ton klingelt sofort beim App-Start, ohne dass eine Pause lief").
-      // Jetzt: Catch-up-Ton nur innerhalb einer kurzen Kulanzfrist, sonst nur still aufräumen.
-      const overdueMs=Date.now()-_timerEndTs;
-      const MAX_CATCHUP_MS=5*60*1000; // 5 Minuten Kulanz
-      if(overdueMs<=MAX_CATCHUP_MS){
-        setTimeout(()=>{
-          unlockAudio();
-          const ac=getAudioCtx();
-          if(ac&&ac.state==='suspended'){ac.resume().then(()=>_timerFire()).catch(()=>_timerFire());}
-          else _timerFire();
-        },200);
-      } else {
-        clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
-        releaseWakeLock();
-        const te=document.getElementById('tov');
-        if(te){te.classList.remove('on');te.style.display='';}
-      }
+      setTimeout(()=>{
+        unlockAudio();
+        const ac=getAudioCtx();
+        if(ac&&ac.state==='suspended'){ac.resume().then(()=>_timerFire()).catch(()=>_timerFire());}
+        else _timerFire();
+      },200);
     }
   }
 });
@@ -4081,53 +3991,41 @@ function gentleFlash(){
   });
 }
 
-function playNotesOnCtx(ac,isPause){
-  const notes=isPause
-    ?[[880,0],[1100,.2],[1320,.4]]
-    :[[1320,0],[1100,.2],[880,.4]];
-  notes.forEach(([freq,delay])=>{
-    try{
-      const osc=ac.createOscillator();
-      const gain=ac.createGain();
-      osc.connect(gain);gain.connect(ac.destination);
-      osc.type='sine';osc.frequency.value=freq;
-      const now=ac.currentTime+delay;
-      gain.gain.setValueAtTime(0.001,now);
-      gain.gain.linearRampToValueAtTime(0.5,now+0.05);
-      gain.gain.exponentialRampToValueAtTime(0.001,now+0.8);
-      osc.start(now);osc.stop(now+0.8);
-    }catch(e){}
-  });
-}
 function playBell(isPause){
   // Try to unlock if not yet done
   unlockAudio();
   const ac=getAudioCtx();
   if(!ac)return;
 
-  // Fallback, falls der bestehende Context tot ist (resume() schlägt fehl) oder bereits
-  // 'closed' ist: EINMAL einen komplett neuen Context erzwingen, statt für den Rest der
-  // Session stumm zu bleiben (das war die Ursache für "manchmal kommt der Ton, manchmal nicht"
-  // nach längeren Pausen mit Bildschirmsperre).
-  const tryFreshCtx=()=>{
-    _audioCtx=null;_audioUnlocked=false;
-    unlockAudio();
-    const ac2=getAudioCtx();
-    if(ac2&&ac2.state!=='suspended')playNotesOnCtx(ac2,isPause);
+  const doPlay=()=>{
+    const notes=isPause
+      ?[[880,0],[1100,.2],[1320,.4]]
+      :[[1320,0],[1100,.2],[880,.4]];
+    notes.forEach(([freq,delay])=>{
+      try{
+        const osc=ac.createOscillator();
+        const gain=ac.createGain();
+        osc.connect(gain);gain.connect(ac.destination);
+        osc.type='sine';osc.frequency.value=freq;
+        const now=ac.currentTime+delay;
+        gain.gain.setValueAtTime(0.001,now);
+        gain.gain.linearRampToValueAtTime(0.5,now+0.05);
+        gain.gain.exponentialRampToValueAtTime(0.001,now+0.8);
+        osc.start(now);osc.stop(now+0.8);
+      }catch(e){}
+    });
   };
 
-  if(ac.state==='closed'){tryFreshCtx();return;}
   if(ac.state==='suspended'){
-    ac.resume().then(()=>playNotesOnCtx(ac,isPause)).catch(tryFreshCtx);
+    ac.resume().then(doPlay).catch(()=>{});
   } else {
-    playNotesOnCtx(ac,isPause);
+    doPlay();
   }
 }
 
 let _timerEndTs=null;
 function _timerFire(){
   clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
-  releaseWakeLock();
   playBell(true);
   gentleFlash();
   const te=document.getElementById('tov');
@@ -4137,22 +4035,8 @@ function _timerFire(){
 function startTimer(secs,lbl){
   if(!secs||secs<=0)return;
   unlockAudio();
-  acquireWakeLock();
-  // Bewusst bei JEDEM Pausenstart einen NEUEN AudioContext anlegen, statt den über die ganze
-  // Session gecachten wiederzuverwenden. Grund: iOS kann einen bestehenden Context nach
-  // Bildschirmsperre/Hintergrund in einen Zustand versetzen, der laut .state weiterhin
-  // "running" ist, aber tatsächlich keinen Ton mehr ausgibt (bekannter WebKit-Bug, per JS
-  // nicht zuverlässig erkennbar — genau das passt zum Symptom "Ton kommt in der Pause gar
-  // nicht mehr"). Ein frischer Context pro Pause ist unkritisch teuer (Millisekunden) und
-  // braucht nach dem ersten Unlock der Seite auch keinen erneuten Silent-Buffer-Trick, weil
-  // die Autoplay-Freigabe seitenweit gilt, nicht pro Context.
-  if(_audioCtx&&_audioCtx.state!=='closed'){try{_audioCtx.close();}catch(e){}}
-  let ac=null;
-  try{
-    ac=new(window.AudioContext||window.webkitAudioContext)();
-    _audioCtx=ac;_audioUnlocked=true;
-  }catch(e){}
-  if(ac&&ac.state==='suspended')ac.resume().catch(()=>{});
+  const ac=getAudioCtx();
+  if(ac&&ac.state==='suspended')ac.resume();
   if(ac){
     try{
       const buf=ac.createBuffer(1,1,22050);
@@ -4903,8 +4787,8 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
   const swapBtn=document.createElement('div');swapBtn.className='swapbtn';swapBtn.textContent='⇄';
   swapBtn.addEventListener('click',e=>{e.stopPropagation();openSwapModal(pid,did,ei,exName);});
   const removeBtn=document.createElement('div');
-  removeBtn.style.cssText='font-size:14px;cursor:pointer;padding:2px 6px;color:var(--muted2);transition:color .2s';
-  removeBtn.textContent='✕';removeBtn.title='Übung entfernen';
+  removeBtn.style.cssText='font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.07);color:var(--red);transition:all .2s;flex-shrink:0';
+  removeBtn.textContent='🗑️';removeBtn.title='Übung entfernen';
   const _rmName=exName;
   const _rmEi=ei;
   const _rmPid=pid;
@@ -4994,7 +4878,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
   removeBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();doRemove();},{passive:false});
   const chev=document.createElement('div');chev.className='chev';chev.textContent='⌄';
   chev.addEventListener('click',()=>card.classList.toggle('open'));
-  er.appendChild(prbdg);if(!ex.cardio)er.appendChild(uniBtn);er.appendChild(removeBtn);er.appendChild(swapBtn);er.appendChild(chev);
+  er.appendChild(prbdg);if(!ex.cardio)er.appendChild(uniBtn);er.appendChild(swapBtn);er.appendChild(removeBtn);er.appendChild(chev);
   hdr.appendChild(nameTap);hdr.appendChild(er);
   if(!minimal){card.appendChild(hdr);} else {card.classList.add('open','excard-minimal');}
 
@@ -7372,7 +7256,7 @@ function renderKcalAnalysis(){
     }
   }
 
-  // Projektion 30 Tage: lineare Fortschreibung des 30-Tage-Trends. Bewusst MIT Unsicherheits-Hinweis,
+  // Prognose 30 Tage: lineare Fortschreibung des 30-Tage-Trends. Bewusst MIT Unsicherheits-Hinweis,
   // weil eine lineare Extrapolation über einen vollen Monat bei nur wenigen Datenpunkten leicht danebenliegt.
   const forecast30=slopePerDay!=null?+(latest.kg+slopePerDay*30).toFixed(1):null;
   const lowDataWarning=last30.length<4; // <4 Punkte über 30 Tage = Prognose mit Vorsicht zu genießen
@@ -7385,21 +7269,7 @@ function renderKcalAnalysis(){
   const fmtWeekly=(v)=>v==null?'–':(v>0?'+':'')+v.toFixed(2)+' kg/Woche';
 
   body.innerHTML=`
-    <div style="display:flex;align-items:center;gap:10px;background:${trendColor}1a;border:1px solid ${trendColor}55;border-radius:12px;padding:11px 13px;margin-bottom:10px">
-      <div style="font-size:20px">${trendIcon}</div>
-      <div>
-        <div style="font-weight:700;font-size:13px;color:${trendColor}">${trendLabel}</div>
-        <div style="font-size:10.5px;color:var(--muted)">Trendampel · Basis: geglätteter Verlauf, nicht Tageswerte</div>
-      </div>
-    </div>
-
-    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px;margin-bottom:10px">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">AKTUELLES TEMPO</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:22px;color:var(--text)">${fmtWeekly(weeklyRate)}</div>
-      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Geglätteter Trend der letzten ${last30.length>=2?'30 Tage':'verfügbaren Daten'}.</div>
-    </div>
-
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
       <div style="background:var(--surface2);border-radius:12px;padding:10px 12px">
         <div style="font-size:10px;color:var(--muted);margin-bottom:3px">GEWICHT 7 TAGE</div>
         <div style="font-family:'Bebas Neue',sans-serif;font-size:20px;color:${diff7==null?'var(--muted)':(diff7<=0?'var(--green)':'var(--red)')}">${fmtDiff(diff7)}</div>
@@ -7410,20 +7280,31 @@ function renderKcalAnalysis(){
       </div>
     </div>
 
-    <div style="background:var(--surface2);border-radius:12px;padding:10px 13px;margin-bottom:10px;opacity:.75">
-      <div style="font-size:9.5px;color:var(--muted);margin-bottom:3px">GESCHÄTZTES TAGESDEFIZIT/-ÜBERSCHUSS</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:18px;color:${estKcalPerDay==null?'var(--muted)':(estKcalPerDay<0?'var(--green)':'var(--gold)')}">${fmtKcal(estKcalPerDay)}</div>
-      <div style="font-size:9.5px;color:var(--muted);margin-top:4px;line-height:1.5">📊 Schätzung aus Gewichtsverlauf (keine Kalorienaufzeichnung) — 1kg ≈ 7700 kcal, kein TDEE-Abgleich.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise.)':''}</div>
+    <div style="background:var(--surface2);border-radius:12px;padding:12px 13px;margin-bottom:12px">
+      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">GESCHÄTZTES TAGESDEFIZIT/-ÜBERSCHUSS</div>
+      <div style="font-family:'Bebas Neue',sans-serif;font-size:24px;color:${estKcalPerDay==null?'var(--muted)':(estKcalPerDay<0?'var(--green)':'var(--gold)')}">${fmtKcal(estKcalPerDay)}</div>
+      <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.5">📊 Schätzung aus Gewichtsverlauf (keine Kalorienaufzeichnung) — 1kg ≈ 7700 kcal, kein TDEE-Abgleich.${tdeeIsFallback?' (Hinweis: dein Profil-Gewicht/Alter/Größe fehlt teilweise.)':''}</div>
     </div>
 
-    <div style="background:${lowDataWarning&&forecast30!=null?'#f59e0b1a':'var(--surface2)'};border:${lowDataWarning&&forecast30!=null?'1px solid #f59e0b55':'none'};border-radius:12px;padding:12px 13px">
-      <div style="font-size:10px;color:var(--muted);margin-bottom:4px">PROJEKTION 30 TAGE</div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
-      ${forecast30!=null
-        ?(lowDataWarning
-          ?`<div style="font-size:11.5px;color:#f59e0b;font-weight:700;margin-top:5px;line-height:1.4">⚠️ Nur ${last30.length} Einträge in den letzten 30 Tagen — Projektion noch ungenau.</div>`
-          :`<div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Lineare Hochrechnung.</div>`)
-        :`<div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Noch nicht genug Daten.</div>`}
+    <div style="display:flex;align-items:center;gap:10px;background:${trendColor}1a;border:1px solid ${trendColor}55;border-radius:12px;padding:11px 13px;margin-bottom:12px">
+      <div style="font-size:20px">${trendIcon}</div>
+      <div>
+        <div style="font-weight:700;font-size:13px;color:${trendColor}">${trendLabel}</div>
+        <div style="font-size:10.5px;color:var(--muted)">Trendampel · Basis: geglätteter Verlauf, nicht Tageswerte</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">AKTUELLES TEMPO</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${fmtWeekly(weeklyRate)}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">Geglätteter Trend der letzten ${last30.length>=2?'30 Tage':'verfügbaren Daten'}.</div>
+      </div>
+      <div style="background:var(--surface2);border-radius:12px;padding:12px 13px">
+        <div style="font-size:10px;color:var(--muted);margin-bottom:4px">PROGNOSE 30 TAGE</div>
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:21px;color:var(--text)">${forecast30!=null?forecast30+' kg':'–'}</div>
+        <div style="font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.4">${forecast30!=null?(lowDataWarning?'⚠️ Nur '+last30.length+' Einträge — Prognose unsicher.':'Lineare Hochrechnung.') : 'Noch nicht genug Daten.'}</div>
+      </div>
     </div>`;
 }
 
@@ -7577,16 +7458,17 @@ function buildMyWorkoutPlanData(){
   // ZNS-/Gelenkrisiko bei 48) wieder aufheben, wenn unverändert dieselbe hohe Satzanzahl bliebe.
   const heavyDay=JSON.parse(JSON.stringify(baseDays.power)).map(ex=>({...ex,sets:Math.max(2,ex.sets-1)}));
 
-  // WICHTIG: jeder Tag braucht eine EINDEUTIGE id — siehe newDayId() weiter oben im Code.
+  // WICHTIG: jeder Tag braucht eine EINDEUTIGE id (wie im Plan-Builder: id:'d_'+Date.now()).
   // Ohne id ist d.id für ALLE Tage `undefined`, wodurch plan.days.find(d=>d.id===did) sowie
   // jeder darauf basierende Storage-Key (K.swap, K.set, currentDayId, dayrr_ etc.) über ALLE
   // Tage des Plans hinweg auf denselben Key kollabiert — das war die Ursache des
   // "undefined"-Bugs im Log (currentDayId=day.id war literal der Wert undefined,
-  // d.id===did traf für JEDEN Tab gleichzeitig zu). newDayId() nutzt einen GLOBALEN
-  // Zähler (nicht nur Date.now()), damit das nie wieder passieren kann — auch nicht an
-  // anderen Stellen im Code, die Day-Objekte erzeugen (z.B. Plan-Builder "Tag hinzufügen").
-  const mkRestDay=()=>({id:newDayId(),name:'Rest',icon:'😴',type:'rest',exercises:[]});
-  const mkDay=(props)=>({id:newDayId(),...props});
+  // d.id===did traf für JEDEN Tab gleichzeitig zu).
+  // Date.now() allein reicht als Basis nicht, da mehrere Tage in derselben Millisekunde
+  // erzeugt werden können -> zusätzlicher Zähler zur Eindeutigkeit.
+  let _dayIdSeq=0;
+  const mkRestDay=()=>({id:'d_'+Date.now()+'_'+(_dayIdSeq++),name:'Rest',icon:'😴',type:'rest',exercises:[]});
+  const mkDay=(props)=>({id:'d_'+Date.now()+'_'+(_dayIdSeq++),...props});
 
   return [
     {
@@ -9459,7 +9341,7 @@ document.getElementById('pb-back')?.addEventListener('click',()=>document.getEle
 document.getElementById('pb-save')?.addEventListener('click',savePlan);
 document.getElementById('pb-addday')?.addEventListener('click',()=>{
   if(!_editPlan.days)_editPlan.days=[];
-  _editPlan.days.push({id:newDayId(),name:'',icon:DAY_ICONS[_editPlan.days.length%DAY_ICONS.length],pauseAW:75,pauseWork:180,exercises:[]});
+  _editPlan.days.push({id:'d_'+Date.now(),name:'',icon:DAY_ICONS[_editPlan.days.length%DAY_ICONS.length],pauseAW:75,pauseWork:180,exercises:[]});
   renderPBDays();
 });
 // Add touchend to all profil si buttons for iOS
@@ -9527,12 +9409,12 @@ document.getElementById('wbtn-prev')?.addEventListener('click',()=>{if(currentWe
 document.getElementById('wbtn-next')?.addEventListener('click',()=>{if(currentWeek<SANITY_MAX_WEEK){currentWeek++;}S.s('currentWeek',currentWeek);document.getElementById('wlbl').textContent=`Woche ${currentWeek}`;renderLog();toast(`📅 Woche ${currentWeek}`);});
 document.getElementById('tr-skip')?.addEventListener('click',()=>{
   clearInterval(_ti);_ti=null;_timerEndTs=null;
-  releaseWakeLock();
+  document.removeEventListener('visibilitychange',_timerVisHandler);
   playBell(false);
   document.getElementById('tov').classList.remove('on');
   toast('⏭ Übersprungen');
 });
-document.getElementById('tr-stop')?.addEventListener('click',()=>{clearInterval(_ti);releaseWakeLock();const te=document.getElementById('tov');if(te){te.classList.remove('on');te.style.display='';}});
+document.getElementById('tr-stop')?.addEventListener('click',()=>{clearInterval(_ti);const te=document.getElementById('tov');if(te){te.classList.remove('on');te.style.display='';}});
 
 function adjustTimer(delta){
   if(!_ti)return; // only when timer is running
@@ -9617,7 +9499,6 @@ if(!S.g('migrated_photo_removal_v1')){
   S.s('migrated_photo_removal_v1','1');
 }
 seedDefaultTemplatesV1();
-repairMissingDayIdsV1();
 const plan0=getActivePlan();
 const _savedDay=loadCurrentDay();
 if(plan0&&_savedDay&&plan0.days.find(d=>d.id===_savedDay&&!d.archived)){
