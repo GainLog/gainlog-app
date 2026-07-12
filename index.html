@@ -6181,6 +6181,18 @@ function renderExDetail(pid,did,week,ei,ex,exName,ct,listWrap){
     });
     mhdrRight.appendChild(uniBtn2);
   }
+  const delBtn2=document.createElement('div');
+  delBtn2.className='texp-mhdr-btn';
+  delBtn2.style.cssText='color:var(--red);border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08)';
+  delBtn2.innerHTML='🗑️';delBtn2.title='Übung entfernen';
+  delBtn2.addEventListener('click',(e)=>{
+    e.stopPropagation();
+    if(!confirm('Übung "'+exName+'" entfernen?'))return;
+    deleteExerciseByIndexSafely(pid,did,ei);
+    toast('🗑️ '+exName+' entfernt');
+    renderTrainingDayDetail(pid,did,week); // komplette Liste neu aufbauen, Indizes haben sich verschoben
+  });
+  mhdrRight.appendChild(delBtn2);
   mhdr.appendChild(mhdrLeft);mhdr.appendChild(mhdrRight);
   card1.appendChild(mhdr);
 
