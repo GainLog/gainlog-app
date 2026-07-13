@@ -4787,8 +4787,8 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
   const swapBtn=document.createElement('div');swapBtn.className='swapbtn';swapBtn.textContent='⇄';
   swapBtn.addEventListener('click',e=>{e.stopPropagation();openSwapModal(pid,did,ei,exName);});
   const removeBtn=document.createElement('div');
-  removeBtn.style.cssText='font-size:13px;cursor:pointer;padding:4px 8px;border-radius:6px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.07);color:var(--red);transition:all .2s;flex-shrink:0';
-  removeBtn.textContent='🗑️';removeBtn.title='Übung entfernen';
+  removeBtn.style.cssText='font-size:14px;cursor:pointer;padding:2px 6px;color:var(--muted2);transition:color .2s';
+  removeBtn.textContent='✕';removeBtn.title='Übung entfernen';
   const _rmName=exName;
   const _rmEi=ei;
   const _rmPid=pid;
@@ -4878,7 +4878,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
   removeBtn.addEventListener('touchend',e=>{e.preventDefault();e.stopPropagation();doRemove();},{passive:false});
   const chev=document.createElement('div');chev.className='chev';chev.textContent='⌄';
   chev.addEventListener('click',()=>card.classList.toggle('open'));
-  er.appendChild(prbdg);if(!ex.cardio)er.appendChild(uniBtn);er.appendChild(swapBtn);er.appendChild(removeBtn);er.appendChild(chev);
+  er.appendChild(prbdg);if(!ex.cardio)er.appendChild(uniBtn);er.appendChild(removeBtn);er.appendChild(swapBtn);er.appendChild(chev);
   hdr.appendChild(nameTap);hdr.appendChild(er);
   if(!minimal){card.appendChild(hdr);} else {card.classList.add('open','excard-minimal');}
 
@@ -4963,6 +4963,28 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       const sKg=S.g(kgK)||'',sW=S.g(wK)||aw.wdh;
       const row=document.createElement('div');row.className='srow';
       const bdg=document.createElement('div');bdg.className='sbdg sb-aw';bdg.textContent=`AW${ai+1}`;
+      // BUGFIX: Dieses Badge sah optisch wie die anfassbaren Satztyp-Badges bei den Arbeitssätzen
+      // aus (MV/RIR1/...), hatte aber bisher KEINEN Klick-Handler — Antippen tat buchstäblich
+      // nichts. Das große Satztyp-Menü (SET_TYPES/openSetTypePicker) passt hier aber nicht 1:1,
+      // weil Aufwärmsätze ein komplett eigenes, auf genau 3 Sätze fest verdrahtetes Speichersystem
+      // (K.aw) sind — "diesen einen AW-Satz auf RIR2 umstellen" hätte keine sinnvolle Bedeutung.
+      // Stattdessen: Antippen bietet die tatsächlich vorhandene Aktion an, die bisher nur versteckt
+      // im Plan-Builder (⚪/🟢-Button) erreichbar war — alle 3 Aufwärmsätze dieser Übung entfernen.
+      bdg.style.cursor='pointer';bdg.title='Tippen zum Entfernen aller Aufwärmsätze';
+      bdg.addEventListener('click',()=>{
+        if(!confirm('Alle 3 Aufwärmsätze für "'+exName+'" entfernen?\n\n(Bereits eingetragene Aufwärm-Gewichte/Wdh bleiben im Hintergrund gespeichert, werden aber nicht mehr angezeigt.)'))return;
+        ex.warmup=false;
+        const plans=getPlans();
+        const p2=plans.find(pp=>pp.id===pid);
+        if(p2){
+          const d2=(p2.days||[]).find(dd=>dd.id===did);
+          const e2=d2&&(d2.exercises||[])[ei];
+          if(e2)e2.warmup=false;
+        }
+        savePlans(plans);
+        toast('🗑️ Aufwärmsätze entfernt');
+        renderTrainingDayDetail(pid,did,week);
+      });
       const kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v)});
       const wC=makeSinp('number','numeric',aw.wdh,sW,v=>{S.s(wK,v)});
       const infC=document.createElement('div');infC.className='scol';
@@ -6181,18 +6203,6 @@ function renderExDetail(pid,did,week,ei,ex,exName,ct,listWrap){
     });
     mhdrRight.appendChild(uniBtn2);
   }
-  const delBtn2=document.createElement('div');
-  delBtn2.className='texp-mhdr-btn';
-  delBtn2.style.cssText='color:var(--red);border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08)';
-  delBtn2.innerHTML='🗑️';delBtn2.title='Übung entfernen';
-  delBtn2.addEventListener('click',(e)=>{
-    e.stopPropagation();
-    if(!confirm('Übung "'+exName+'" entfernen?'))return;
-    deleteExerciseByIndexSafely(pid,did,ei);
-    toast('🗑️ '+exName+' entfernt');
-    renderTrainingDayDetail(pid,did,week); // komplette Liste neu aufbauen, Indizes haben sich verschoben
-  });
-  mhdrRight.appendChild(delBtn2);
   mhdr.appendChild(mhdrLeft);mhdr.appendChild(mhdrRight);
   card1.appendChild(mhdr);
 
