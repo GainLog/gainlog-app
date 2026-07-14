@@ -2956,6 +2956,9 @@ const SET_TYPES=[
 
 function getSetType(id){return SET_TYPES.find(t=>t.id===id)||SET_TYPES[0];}
 function KsetType(pid,did,ei,si){return 'stype_'+pid+'_'+did+'_e'+ei+'_s'+si;}
+// Analog zu KsetType, aber für die fest verdrahteten Aufwärmsätze (K.aw-System), damit ihre
+// Satztyp-Zuordnung unabhängig von den Arbeitssätzen persistiert werden kann.
+function KsetTypeAW(pid,did,ei,ai){return 'stypeaw_'+pid+'_'+did+'_e'+ei+'_a'+ai;}
 
 // Set type picker state
 let _stPickerCb=null;
@@ -4962,28 +4965,38 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       const kgK=K.aw(pid,did,week,ei,ai,'kg'),wK=K.aw(pid,did,week,ei,ai,'wdh');
       const sKg=S.g(kgK)||'',sW=S.g(wK)||aw.wdh;
       const row=document.createElement('div');row.className='srow';
-      const bdg=document.createElement('div');bdg.className='sbdg sb-aw';bdg.textContent=`AW${ai+1}`;
+      const bdg=document.createElement('div');
       // BUGFIX: Dieses Badge sah optisch wie die anfassbaren Satztyp-Badges bei den Arbeitssätzen
       // aus (MV/RIR1/...), hatte aber bisher KEINEN Klick-Handler — Antippen tat buchstäblich
-      // nichts. Das große Satztyp-Menü (SET_TYPES/openSetTypePicker) passt hier aber nicht 1:1,
-      // weil Aufwärmsätze ein komplett eigenes, auf genau 3 Sätze fest verdrahtetes Speichersystem
-      // (K.aw) sind — "diesen einen AW-Satz auf RIR2 umstellen" hätte keine sinnvolle Bedeutung.
-      // Stattdessen: Antippen bietet die tatsächlich vorhandene Aktion an, die bisher nur versteckt
-      // im Plan-Builder (⚪/🟢-Button) erreichbar war — alle 3 Aufwärmsätze dieser Übung entfernen.
-      bdg.style.cursor='pointer';bdg.title='Tippen zum Entfernen aller Aufwärmsätze';
-      bdg.addEventListener('click',()=>{
-        if(!confirm('Alle 3 Aufwärmsätze für "'+exName+'" entfernen?\n\n(Bereits eingetragene Aufwärm-Gewichte/Wdh bleiben im Hintergrund gespeichert, werden aber nicht mehr angezeigt.)'))return;
-        ex.warmup=false;
-        const plans=getPlans();
-        const p2=plans.find(pp=>pp.id===pid);
-        if(p2){
-          const d2=(p2.days||[]).find(dd=>dd.id===did);
-          const e2=d2&&(d2.exercises||[])[ei];
-          if(e2)e2.warmup=false;
-        }
-        savePlans(plans);
-        toast('🗑️ Aufwärmsätze entfernt');
-        renderTrainingDayDetail(pid,did,week);
+      // nichts. Jetzt: exakt dieselbe Satztyp-Auswahl (SET_TYPES/openSetTypePicker) wie bei den
+      // Arbeitssätzen, nur mit eigenem Storage-Key (KsetTypeAW statt KsetType), da Aufwärmsätze
+      // ein separates Speichersystem (K.aw) für kg/wdh/Pause haben. Die Auswahl ändert nur die
+      // Beschriftung/Farbe dieser einen AW-Zeile — Gewicht, Wdh und Pausenzeit bleiben unangetastet.
+      const customAwTypeId=S.g(KsetTypeAW(pid,did,ei,ai));
+      const awSt=customAwTypeId?getSetType(customAwTypeId):getSetType('warm');
+      bdg.className='sbdg '+awSt.cls;
+      bdg.textContent=customAwTypeId?awSt.label:`AW${ai+1}`;
+      bdg.title='Tippen zum Ändern';
+      bdg.style.cursor='pointer';
+      bdg.addEventListener('click',function(){
+        const grid=document.getElementById('stype-grid');
+        if(!grid)return;
+        grid.innerHTML='';
+        SET_TYPES.forEach(ty=>{
+          const opt=document.createElement('div');opt.className='stype-opt';
+          opt.innerHTML='<div class="stype-badge '+ty.cls+'">'+ty.label+'</div>'
+            +'<div class="stype-info"><div class="name">'+ty.name+'</div><div class="desc">'+ty.desc+'</div></div>';
+          const applyType=()=>{
+            S.s(KsetTypeAW(pid,did,ei,ai),ty.id);
+            closeSetTypePicker();
+            bdg.className='sbdg '+ty.cls;
+            bdg.textContent=ty.label;
+          };
+          opt.addEventListener('click',applyType);
+          opt.addEventListener('touchend',function(e){e.preventDefault();applyType();},{passive:false});
+          grid.appendChild(opt);
+        });
+        openSetTypePicker();
       });
       const kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v)});
       const wC=makeSinp('number','numeric',aw.wdh,sW,v=>{S.s(wK,v)});
