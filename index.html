@@ -1735,23 +1735,6 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
   </div>
 </div>
 
-<!-- REP RANGE PICKER -->
-<div class="rr-picker" id="rrPicker" style="display:none">
-  <div class="rr-sheet">
-    <div class="rr-title">REP RANGE WÄHLEN</div>
-    <div class="rr-sub">Zielbereich für Wiederholungen dieser Übung</div>
-    <div class="rr-grid" id="rr-grid"></div>
-    <div style="font-size:11px;color:var(--muted);margin-bottom:6px;font-weight:700">CUSTOM RANGE:</div>
-    <div class="rr-custom">
-      <input type="number" id="rr-min" placeholder="Min" inputmode="numeric">
-      <span>–</span>
-      <input type="number" id="rr-max" placeholder="Max" inputmode="numeric">
-      <button onclick="applyCustomRange()" style="background:var(--blue);border:none;border-radius:8px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:14px;padding:10px 16px;cursor:pointer;white-space:nowrap">OK</button>
-    </div>
-    <button onclick="applyRRNone()" style="width:100%;padding:11px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--muted);font-size:13px;cursor:pointer">Kein Zielbereich</button>
-  </div>
-</div>
-
 <!-- SET TYPE PICKER -->
 <div class="stype-picker" id="stypePicker">
   <div class="stype-sheet">
@@ -2474,8 +2457,6 @@ function applyTemplateToDay(day,tpl){
   day.icon=tpl.icon||day.icon;
   day.pauseAW=tpl.pauseAW||day.pauseAW;
   day.pauseWork=tpl.pauseWork||day.pauseWork;
-  if(tpl.rrMin)day.rrMin=tpl.rrMin;else delete day.rrMin;
-  if(tpl.rrMax)day.rrMax=tpl.rrMax;else delete day.rrMax;
   day.exercises=JSON.parse(JSON.stringify(tpl.exercises||[]));
   if(!day.name||!day.name.trim())day.name=tpl.name;
 }
@@ -2485,7 +2466,7 @@ function saveDayAsTemplate(day){
   if(!name)return;
   const templates=getDayTemplates();
   const dupIdx=templates.findIndex(t=>t.name===name&&!t.builtin);
-  const tpl={id:'tpl_'+Date.now(),name,icon:day.icon||'💪',pauseAW:day.pauseAW||75,pauseWork:day.pauseWork||180,rrMin:day.rrMin,rrMax:day.rrMax,exercises:JSON.parse(JSON.stringify(day.exercises||[]))};
+  const tpl={id:'tpl_'+Date.now(),name,icon:day.icon||'💪',pauseAW:day.pauseAW||75,pauseWork:day.pauseWork||180,exercises:JSON.parse(JSON.stringify(day.exercises||[]))};
   if(dupIdx>=0){
     if(!confirm('Vorlage "'+name+'" existiert bereits. Überschreiben?'))return;
     templates[dupIdx]=tpl;
@@ -2786,20 +2767,20 @@ function openBackupManager(){
 
 // ══ SET GENERATION ════════════════════════════════════════
 // ══ REP RANGES ════════════════════════════════════════
-const REP_RANGES=[
-  {label:'1–5',   desc:'Kraft / Max Strength',  min:1, max:5},
-  {label:'6–8',   desc:'Kraft-Hypertrophie',    min:6, max:8},
-  {label:'8–10',  desc:'Hypertrophie (schwer)', min:8, max:10},
-  {label:'10–12', desc:'Hypertrophie (mittel)', min:10,max:12},
-  {label:'12–15', desc:'Hypertrophie (leicht)', min:12,max:15},
-  {label:'15–20', desc:'Ausdauer-Hypertrophie', min:15,max:20},
-  {label:'20–30', desc:'Metabolisch / Pump',    min:20,max:30},
-  {label:'6–12',  desc:'Klassischer Aufbau',    min:6, max:12},
-];
-
+// Wiederholungsbereich ist eine Eigenschaft der einzelnen Übung
+// (exercise.targetRepMin / exercise.targetRepMax), NICHT des Tages. Jede Übung trägt
+// ihren Zielbereich direkt auf sich selbst — dadurch bleibt er automatisch korrekt bei
+// Reorder, Swap, "Als Vorlage speichern", Tag-Export/Import und Plan-Export/Import,
+// ohne eigene Index-basierte Migrationslogik dafür (anders als die Alt-Mechanismen unten).
+//
+// Alt-Mechanismen (bis zu dieser Version): (1) day.rrMin/rrMax als Plan-Default,
+// (2) dayrr_{pid}_{did}_w{week} als wochenspezifischer Tages-Override, (3) KrrEx als
+// Pro-Übung-Override-Key. Alle drei waren de facto nie vollständig nutzbar (der Picker,
+// der (3) hätte setzen sollen, wurde nie mit Kontext geöffnet — toter Code) und werden
+// durch exercise.targetRepMin/Max ersetzt. getDayRR/getDefaultRRForDay/KrrEx bleiben nur
+// als Lesequellen für die einmalige Migration bestehen (migrateExerciseRepRangesV1).
 function KrrEx(pid,did,ei){return 'rr_'+pid+'_'+did+'_e'+ei;}
 
-// Rep range für einen Tag — wochenspezifisch mit Fallback auf Vorwochen
 function getDayRR(pid,did,week){
   for(let w=week;w>=1;w--){
     const k=S.gj('dayrr_'+pid+'_'+did+'_w'+w);
@@ -2811,39 +2792,8 @@ function getDayRR(pid,did,week){
   return null;
 }
 
-// Store current context directly on picker element – no closure dependency
-
-function applyRRValue(min,max){
-  const picker=document.getElementById('rrPicker');
-  if(!picker)return;
-  const pid=picker._pid,did=picker._did,ei=picker._ei,badge=picker._badge;
-  const key=KrrEx(pid,did,ei);
-  if(min&&max){S.sj(key,{min,max});}
-  else{S.d(key);}
-  // Update badge
-  if(badge){badge.textContent=min&&max?'🎯 '+min+'–'+max:'🎯 Range';}
-  closeRepRangePicker();
-  // Refresh all wdh inputs for this exercise
-  setTimeout(()=>refreshWdhColors(pid,did,currentWeek,ei),100);
-}
-
-function closeRepRangePicker(){
-  const picker=document.getElementById('rrPicker');
-  if(picker)picker.classList.remove('on');
-}
-
-function applyCustomRange(){
-  let min=parseInt(document.getElementById('rr-min').value,10);
-  let max=parseInt(document.getElementById('rr-max').value,10);
-  if(isNaN(min)||isNaN(max)||min<=0||max<=0){toast('⚠️ Bitte beide Werte eingeben');return;}
-  if(min>max){const tmp=min;min=max;max=tmp;}
-  if(min===max)max=min+1;
-  applyRRValue(min,max);
-}
-
-function applyRRNone(){applyRRValue(null,null);}
-
-// Get default rep range from day name/type
+// Get default rep range from day name/type — genutzt als Startwert für neu angelegte
+// Übungen ohne eigenen Zielbereich sowie als Fallback in getExerciseRR.
 function getDefaultRRForDay(day){
   if(!day)return null;
   const nm=(day.name||'').toLowerCase();
@@ -2860,11 +2810,17 @@ function getDefaultRRForDay(day){
   return null;
 }
 
+// Zentrale, EINZIGE Quelle der Wahrheit für den effektiven Zielbereich einer Übung.
+// exercise.targetRepMin/Max ist nach der Migration (und bei allen Neuanlage-Stellen)
+// immer gesetzt; der Fallback greift nur bei unvollständigen/fehlerhaften Fremd-Importen.
+function getExerciseRR(ex,day){
+  if(ex&&ex.targetRepMin&&ex.targetRepMax)return{min:ex.targetRepMin,max:ex.targetRepMax};
+  return getDefaultRRForDay(day)||{min:6,max:12};
+}
+
 function checkWdhInRange(wdhEl,pid,did,week,ei,si,day){
-  // Use per-exercise range if set, else use day range picker, else day default
-  const saved=S.gj(KrrEx(pid,did,ei));
-  const _dayRR=getDayRR(pid,did,week);
-  const range=saved&&saved.min?saved:(_dayRR&&_dayRR.min?_dayRR:(day?getDefaultRRForDay(day):null));
+  const ex=day&&day.exercises&&day.exercises[ei];
+  const range=getExerciseRR(ex,day);
   wdhEl.style.borderColor='';wdhEl.style.background='';wdhEl.title='';
   if(!range||!range.min)return;
   const wdh=parseInt(wdhEl.value)||0;
@@ -2885,13 +2841,56 @@ function checkWdhInRange(wdhEl,pid,did,week,ei,si,day){
   }
 }
 
-// After setting range, update all visible wdh inputs for this exercise
-function refreshWdhColors(pid,did,week,ei){
-  const plan=getActivePlan();
-  const day=plan&&plan.days.find(d=>d.id===did);
-  const cnt=getSetCount(pid,did,ei,3);
-  // Simply re-render the log to refresh all colors properly
-  renderLog();
+// Ermittelt für EINE Übung (beim einmaligen Migrationslauf) den bisher effektiv
+// gültigen Wiederholungsbereich, in absteigender Priorität über alle Alt-Quellen:
+//   1. ex.rrMin/rrMax        (fest im Preset-Plan-Katalog hinterlegter Pro-Übung-Wert)
+//   2. KrrEx-Key              (alter, technisch nie erreichbarer Pro-Übung-Override —
+//                              defensiv trotzdem gelesen, falls je auf anderem Weg gesetzt)
+//   3. dayrr_*_w{week}        (wochenspezifischer Tages-Override, neueste bekannte Woche)
+//   4. day.rrMin/rrMax        (Plan-Level Tages-Default, falls (3) nie geschrieben wurde)
+//   5. getDefaultRRForDay     (Heuristik über Tagesname/Pausenzeit)
+//   6. {min:6,max:12}         (harter Fallback, deckt sich mit dem bisherigen App-Default)
+function computeLegacyEffectiveRR(pid,did,ei,ex,day){
+  if(ex&&ex.rrMin&&ex.rrMax)return{min:ex.rrMin,max:ex.rrMax};
+  const legacyEx=S.gj(KrrEx(pid,did,ei));
+  if(legacyEx&&legacyEx.min&&legacyEx.max)return legacyEx;
+  const dayRR=getDayRR(pid,did,currentWeek);
+  if(dayRR&&dayRR.min&&dayRR.max)return dayRR;
+  if(day&&day.rrMin&&day.rrMax)return{min:day.rrMin,max:day.rrMax};
+  const def=getDefaultRRForDay(day);
+  if(def)return def;
+  return{min:6,max:12};
+}
+
+// Einmalige Migration: überführt ALLE drei bisherigen Rep-Range-Mechanismen
+// (Plan-Default, wochenspezifischer Tages-Override, toter Pro-Übung-Override)
+// in exercise.targetRepMin/targetRepMax. Läuft nur einmal (idempotent über
+// migrated_reprange_v1) und verändert an bestehenden Trainingsdaten (Sätze/
+// Gewichte/Historie) nichts — nur die Plan-Struktur bekommt die neuen Felder.
+function migrateExerciseRepRangesV1(){
+  if(S.g('migrated_reprange_v1'))return;
+  const plans=getPlans();
+  const legacyKeysToRemove=[];
+  plans.forEach(plan=>{
+    (plan.days||[]).forEach(day=>{
+      (day.exercises||[]).forEach((ex,ei)=>{
+        if(!(ex.targetRepMin&&ex.targetRepMax)){
+          const rr=computeLegacyEffectiveRR(plan.id,day.id,ei,ex,day);
+          ex.targetRepMin=rr.min;
+          ex.targetRepMax=rr.max;
+        }
+        // Alte, jetzt überflüssige Inline-Felder aus dem Preset-Katalog aufräumen
+        if(ex.rrMin!==undefined)delete ex.rrMin;
+        if(ex.rrMax!==undefined)delete ex.rrMax;
+        legacyKeysToRemove.push(KrrEx(plan.id,day.id,ei));
+      });
+    });
+  });
+  savePlans(plans);
+  // Verwaiste Alt-Keys (Pro-Übung-Override, nie über UI erreichbar) aus dem
+  // localStorage entfernen — reduziert Speicherverbrauch, siehe _quotaSafeWrite.
+  legacyKeysToRemove.forEach(k=>S.d(k));
+  S.s('migrated_reprange_v1','1');
 }
 
 // ══ SET TYPES ═════════════════════════════════════════
@@ -3004,9 +3003,13 @@ const K={
 //   - K.awcnt     (wochenunabhängig, Custom-Aufwärmsatz-Anzahl)
 //   - K.swap      (wochenunabhängig, Übungstausch-Anzeigename)
 //   - K.uni       (wochenunabhängig, Unilateral-Flag)
-//   - KrrEx       (wochenunabhängig, Rep-Range-Override)
 //   - epause_     (wochenunabhängig, individuelle Pausenzeit-Übersteuerung)
 //   - KsetType    (wochenunabhängig, aber pro Satz — Satztyp wie RIR/Dropsatz/Restpause/Giant-Set)
+// HINWEIS: exercise.targetRepMin/targetRepMax (Ziel-Wiederholungsbereich) steht bewusst NICHT in
+// dieser Liste — der Wert lebt direkt auf dem Übungs-Objekt in day.exercises[] und wandert dadurch
+// automatisch mit, wenn Übungen umsortiert werden. Der frühere Pro-Übung-Override-Key KrrEx (separat
+// von der Übung gespeichert, per Index adressiert) wurde ersetzt und braucht daher keine Reorder-
+// Migration mehr; siehe migrateExerciseRepRangesV1 für die einmalige Altdaten-Übernahme.
 // Jede Stelle, die Übungen im Plan umsortiert/löscht/einfügt (Plan-Builder UND Log-Reorder), MUSS
 // diese Funktion nutzen — sonst bleiben Daten am alten Index hängen und werden der falsch
 // verschobenen Übung zugeordnet (siehe Bugreport: Übung "doppelt" im Log, Gewichte verschieben sich
@@ -3069,7 +3072,6 @@ function migrateExerciseDataForReorder(pid,did,oldOrder,newOrder){
   migrate(ei=>K.awcnt(pid,did,ei));
   migrate(ei=>K.swap(pid,did,ei));
   migrate(ei=>K.uni(pid,did,ei));
-  migrate(ei=>KrrEx(pid,did,ei));
   // Individuelle Pausenzeit-Übersteuerung pro Übung (Fallback sonst auf day.pauseWork) — wochenunabhängig.
   migrate(ei=>'epause_'+pid+'_'+did+'_'+ei);
   // Satztyp (RIR/Dropsatz/Restpause/Giant-Set/...) ist pro Satz-Slot fix, aber wochenunabhängig
@@ -3292,15 +3294,8 @@ function exportPlanAsText(plan){
         }
         if(_maxSi>0)sets=_maxSi;
       }
-      const rrSaved=S.gj(KrrEx(plan.id,day.id,ei));
-      let rrStr='';
-      if(rrSaved&&rrSaved.min){rrStr=' · '+rrSaved.min+'–'+rrSaved.max+' Wdh';}
-      else{
-        // Use day rep range picker value
-        const _dayRRExp=getDayRR(plan.id,day.id,currentWeek);
-        if(_dayRRExp&&_dayRRExp.min)rrStr=' · '+_dayRRExp.min+'–'+_dayRRExp.max+' Wdh';
-        else{const defRR=getDefaultRRForDay(day);if(defRR)rrStr=' · '+defRR.min+'–'+defRR.max+' Wdh';}
-      }
+      const _rrExp=getExerciseRR(ex,day);
+      const rrStr=_rrExp&&_rrExp.min?' · '+_rrExp.min+'–'+_rrExp.max+' Wdh':'';
       txt+='  '+(ei+1)+'. '+name+NL;
       if(ex.cardio){
         const cMin=S.g(K.set(plan.id,day.id,1,ei,0,'kg'))||'?';
@@ -3630,7 +3625,7 @@ function checkLicenseOnStart(){
   if(licEl){
     licEl.style.display='flex';
     // Close any open modals/pickers that might show through
-    ['rrPicker','stypePicker','swapMov','addExMov','qrMov','summaryMov','weekMov'].forEach(id=>{
+    ['stypePicker','swapMov','addExMov','qrMov','summaryMov','weekMov'].forEach(id=>{
       const el=document.getElementById(id);
       if(el){el.classList.remove('on');el.style.display='none';}
     });
@@ -4192,7 +4187,7 @@ function calcPerformanceScore(pid,did,week){
 
   day.exercises.forEach((ex,ei)=>{
     const cnt=getSetCount(pid,did,ei,ex.sets||3);
-    const rr=S.gj(KrrEx(pid,did,ei))||getDayRR(pid,did,week)||getDefaultRRForDay(day);
+    const rr=getExerciseRR(ex,day);
     let exHasSets=false;
 
     for(let si=0;si<cnt;si++){
@@ -5121,8 +5116,8 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       const rrHint=document.createElement('div');
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
       function updateRRHint(){
-        const _rrDay=getDayRR(pid,did,week)||{min:6,max:12};
-        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div class="rr-hint-val" style="font-size:12px;font-weight:800;color:var(--green)">'+_rrDay.min+'–'+_rrDay.max+'</div>';
+        const _rrEx=getExerciseRR(day&&day.exercises&&day.exercises[ei],day);
+        rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div class="rr-hint-val" style="font-size:12px;font-weight:800;color:var(--green)">'+_rrEx.min+'–'+_rrEx.max+'</div>';
       }
       updateRRHint();
       if(!_uniMode){row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC);row.appendChild(rrHint);}else{row.appendChild(rrHint);}
@@ -5378,7 +5373,8 @@ function getProgressionSuggestion(pid,did,week,ei){
 
   const plan=getActivePlan();
   const day=plan&&plan.days.find(d=>d.id===did);
-  const rr=S.gj(KrrEx(pid,did,ei))||getDayRR(pid,did,week)||getDefaultRRForDay(day)||{min:6,max:12};
+  const ex=day&&day.exercises&&day.exercises[ei];
+  const rr=getExerciseRR(ex,day);
   const sets=last.sets;
   const topKg=Math.max(...sets.map(s=>s.kg));
   const topSet=sets.find(s=>s.kg===topKg);
@@ -5990,39 +5986,8 @@ function renderTrainingDayDetail(pid,did,week){
   leg.innerHTML='<div class="legi"><div class="legd ldaw"></div>AW</div><div class="legi"><div class="legd ldrir"></div>RIR</div><div class="legi"><div class="legd ldmv"></div>MV</div>';
   ct.appendChild(leg);
 
-  // Rep Range Editor (Von/Bis) – einzige Möglichkeit, die Range zu setzen
-  const _rrDayKey='dayrr_'+pid+'_'+did+'_w'+week;
-  if(day.rrMin&&day.rrMax){const _existing=S.gj(_rrDayKey);if(!_existing||_existing._fromPlan){S.sj(_rrDayKey,{min:day.rrMin,max:day.rrMax,_fromPlan:true});}}
-  const _rrSaved=getDayRR(pid,did,week)||{min:6,max:12};
-  const ttWrap=document.createElement('div');
-  ttWrap.style.cssText='background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:10px;margin:8px 12px;display:flex;align-items:center;gap:10px';
-  const ttLabel=document.createElement('div');
-  ttLabel.style.cssText='font-size:10px;color:var(--muted2);font-weight:700;letter-spacing:1px;white-space:nowrap';
-  ttLabel.textContent='REP RANGE';
-  const ttMin=document.createElement('input');
-  ttMin.type='number';ttMin.inputMode='numeric';
-  ttMin.value=_rrSaved.min;ttMin.min=1;ttMin.max=100;
-  ttMin.style.cssText='flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px;text-align:center;font-size:16px;font-weight:700;color:var(--green);width:0';
-  const ttSep=document.createElement('div');
-  ttSep.style.cssText='font-size:14px;color:var(--muted2);font-weight:700';ttSep.textContent='–';
-  const ttMax=document.createElement('input');
-  ttMax.type='number';ttMax.inputMode='numeric';
-  ttMax.value=_rrSaved.max;ttMax.min=1;ttMax.max=100;
-  ttMax.style.cssText='flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;padding:8px;text-align:center;font-size:16px;font-weight:700;color:var(--green);width:0';
-  const ttUnit=document.createElement('div');
-  ttUnit.style.cssText='font-size:11px;color:var(--muted2);white-space:nowrap';ttUnit.textContent='Wdh';
-  function saveDayRR(){
-    const mn=parseInt(ttMin.value)||1;
-    const mx=parseInt(ttMax.value)||mn;
-    S.sj(_rrDayKey,{min:Math.min(mn,mx),max:Math.max(mn,mx),_fromPlan:false});
-    document.querySelectorAll('.rr-hint-val').forEach(el=>{el.textContent=Math.min(mn,mx)+'–'+Math.max(mn,mx);});
-    document.querySelectorAll('.sinp-wdh').forEach(el=>{el.dispatchEvent(new Event('input'));});
-    document.querySelectorAll('.sc2-rr').forEach(el=>{el.dispatchEvent(new Event('rrchange'));});
-  }
-  ttMin.addEventListener('input',saveDayRR);
-  ttMax.addEventListener('input',saveDayRR);
-  ttWrap.appendChild(ttLabel);ttWrap.appendChild(ttMin);ttWrap.appendChild(ttSep);ttWrap.appendChild(ttMax);ttWrap.appendChild(ttUnit);
-  ct.appendChild(ttWrap);
+  // Rep Range wird jetzt ausschließlich pro Übung im Plan-Builder gepflegt
+  // (exercise.targetRepMin/targetRepMax) — der frühere Tages-Editor hier entfällt.
 
   // Migration: alte K.extra Übungen einmalig in day.exercises übernehmen
   const oldExtras=S.gj(K.extra(pid,did,week))||[];
@@ -6032,9 +5997,10 @@ function renderTrainingDayDetail(pid,did,week){
     if(pl2){
       const dy2=pl2.days.find(d=>d.id===did);
       if(dy2){
+        const _extraDefRR=getDefaultRRForDay(dy2)||{min:8,max:12};
         oldExtras.forEach(ex=>{
           if(!dy2.exercises.find(e=>e.name===ex.name)){
-            dy2.exercises.push({name:ex.name,cat:ex.cat||'',typ:ex.typ||'',type:'rir-mv',sets:3,warmup:false});
+            dy2.exercises.push({name:ex.name,cat:ex.cat||'',typ:ex.typ||'',type:'rir-mv',sets:3,warmup:false,targetRepMin:_extraDefRR.min,targetRepMax:_extraDefRR.max});
           }
         });
         savePlans(plans2);
@@ -6692,7 +6658,8 @@ function renderAddExList(){
       if(pl){
         const dy=pl.days.find(d=>d.id===_aeDid);
         if(dy){
-          dy.exercises.push({name:exToAdd.de,cat:exToAdd.cat,typ:exToAdd.typ,type:'rir-mv',sets:3,warmup:false});
+          const _addDefRR=getDefaultRRForDay(dy)||{min:8,max:12};
+          dy.exercises.push({name:exToAdd.de,cat:exToAdd.cat,typ:exToAdd.typ,type:'rir-mv',sets:3,warmup:false,targetRepMin:_addDefRR.min,targetRepMax:_addDefRR.max});
           savePlans(plans);
         }
       }
@@ -7250,7 +7217,9 @@ function exportDay(day){
     exercises:(day.exercises||[]).map(ex=>({
       name:ex.name,cat:ex.cat,typ:ex.typ,
       sets:ex.sets||3,type:ex.type||'rir-mv',
-      warmup:ex.warmup||false
+      warmup:ex.warmup||false,
+      targetRepMin:ex.targetRepMin,targetRepMax:ex.targetRepMax,
+      trainingType:ex.trainingType,trainingTypeLabel:ex.trainingTypeLabel
     }))
   };
   const json=JSON.stringify(exportObj,null,2);
@@ -7275,7 +7244,15 @@ function importDayFile(day,onDone){
         const obj=JSON.parse(e.target.result);
         if(!obj.exercises){toast('❌ Ungültige .gainlogday Datei');return;}
         if(!confirm('Übungen für "'+day.name+'" mit "'+obj.dayName+'" ersetzen? Bestehende Reihenfolge wird überschrieben.'))return;
-        day.exercises=obj.exercises.map(ex=>({...ex}));
+        const _impDefRR=getDefaultRRForDay(day)||{min:8,max:12};
+        day.exercises=obj.exercises.map(ex=>{
+          const merged={...ex};
+          if(!(merged.targetRepMin&&merged.targetRepMax)){
+            merged.targetRepMin=merged.targetRepMin||_impDefRR.min;
+            merged.targetRepMax=merged.targetRepMax||_impDefRR.max;
+          }
+          return merged;
+        });
         onDone();
         toast('✅ '+obj.dayName+' geladen!');
       }catch(err){toast('❌ Fehler beim Import');}
@@ -7397,24 +7374,15 @@ function renderPBDays(){
     });
     dbody.appendChild(prow);
 
-    // Rep Range per day
-    const rrRow=document.createElement('div');rrRow.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:10px;background:#0d0d0d;border:1px solid #222;border-radius:10px;padding:8px 12px';
-    const rrLbl=document.createElement('div');rrLbl.style.cssText='font-size:10px;color:#555;font-weight:700;letter-spacing:1px;white-space:nowrap;flex:0 0 auto';rrLbl.textContent='REP RANGE';
-    const rrMin=document.createElement('input');rrMin.type='number';rrMin.inputMode='numeric';rrMin.placeholder='Von';rrMin.min=1;rrMin.max=100;
-    rrMin.value=day.rrMin||'';
-    rrMin.style.cssText='flex:1;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:7px;text-align:center;font-size:15px;font-weight:700;color:var(--green);width:0;outline:none';
-    const rrSep=document.createElement('div');rrSep.style.cssText='font-size:13px;color:#555;font-weight:700';rrSep.textContent='–';
-    const rrMax=document.createElement('input');rrMax.type='number';rrMax.inputMode='numeric';rrMax.placeholder='Bis';rrMax.min=1;rrMax.max=100;
-    rrMax.value=day.rrMax||'';
-    rrMax.style.cssText='flex:1;background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:7px;text-align:center;font-size:15px;font-weight:700;color:var(--green);width:0;outline:none';
-    const rrUnit=document.createElement('div');rrUnit.style.cssText='font-size:11px;color:#555;white-space:nowrap';rrUnit.textContent='Wdh';
-    rrMin.addEventListener('input',()=>{const v=parseInt(rrMin.value);if(v>0)day.rrMin=v;else delete day.rrMin;});
-    rrMax.addEventListener('input',()=>{const v=parseInt(rrMax.value);if(v>0)day.rrMax=v;else delete day.rrMax;});
-    rrRow.appendChild(rrLbl);rrRow.appendChild(rrMin);rrRow.appendChild(rrSep);rrRow.appendChild(rrMax);rrRow.appendChild(rrUnit);
-    dbody.appendChild(rrRow);
-
     // Exercises
     (day.exercises||[]).forEach((ex,exi)=>{
+      // Ziel-Wiederholungsbereich: falls (Alt-Plan / manueller Import) noch nicht gesetzt,
+      // hier defensiv mit einem sinnvollen Default füllen statt undefined zu belassen.
+      if(!ex.cardio&&!(ex.targetRepMin&&ex.targetRepMax)){
+        const _def=getDefaultRRForDay(day)||{min:8,max:12};
+        ex.targetRepMin=ex.targetRepMin||_def.min;
+        ex.targetRepMax=ex.targetRepMax||_def.max;
+      }
       const exb=document.createElement('div');exb.className='exbuilder';
       const exMoveWrap=document.createElement('div');exMoveWrap.style.cssText='display:flex;flex-direction:column;gap:1px;flex-shrink:0';
       const exUp=document.createElement('div');exUp.textContent='▲';
@@ -7426,25 +7394,27 @@ function renderPBDays(){
       exMoveWrap.appendChild(exUp);exMoveWrap.appendChild(exDown);
       const info=document.createElement('div');info.style.flex='1';
       const nm=document.createElement('div');nm.className='exbname';nm.textContent=ex.name;
-      const meta=document.createElement('div');meta.className='exbmeta';meta.textContent=`${ex.sets} Sätze · ${ex.type}${ex.warmup?' · AW':''}`;
+      const meta=document.createElement('div');meta.className='exbmeta';
+      function syncMeta(){meta.textContent=`${ex.sets} Sätze · ${ex.type}${ex.warmup?' · AW':''}${ex.cardio?'':' · '+ex.targetRepMin+'–'+ex.targetRepMax+' Wdh'}`;}
+      syncMeta();
       info.appendChild(nm);info.appendChild(meta);
 
       const ctrl=document.createElement('div');ctrl.className='exbctrl';
       // Set count
       const minus=document.createElement('div');minus.className='exbc';minus.textContent='−';
-      minus.addEventListener('click',()=>{if(ex.sets>1){ex.sets--;cnt.textContent=ex.sets;meta.textContent=`${ex.sets} Sätze · ${ex.type}${ex.warmup?' · AW':''}`;}});
+      minus.addEventListener('click',()=>{if(ex.sets>1){ex.sets--;cnt.textContent=ex.sets;syncMeta();}});
       const cnt=document.createElement('div');cnt.className='exbn';cnt.textContent=ex.sets;
       const plus=document.createElement('div');plus.className='exbc';plus.textContent='+';
-      plus.addEventListener('click',()=>{ex.sets++;cnt.textContent=ex.sets;meta.textContent=`${ex.sets} Sätze · ${ex.type}${ex.warmup?' · AW':''}`;});
+      plus.addEventListener('click',()=>{ex.sets++;cnt.textContent=ex.sets;syncMeta();});
       // Type toggle
       const typeBtn=document.createElement('div');typeBtn.className=`exbtype ${ex.type}`;
       const typeLabels={'rir-mv':'RIR→MV','all-mv':'Alle MV','all-rir':'Alle RIR'};
       typeBtn.textContent=typeLabels[ex.type]||ex.type;
       const types=['rir-mv','all-mv','all-rir'];let typeIdx=types.indexOf(ex.type);
-      typeBtn.addEventListener('click',()=>{typeIdx=(typeIdx+1)%types.length;ex.type=types[typeIdx];typeBtn.textContent=typeLabels[ex.type];typeBtn.className=`exbtype ${ex.type}`;meta.textContent=`${ex.sets} Sätze · ${ex.type}${ex.warmup?' · AW':''}`;});
+      typeBtn.addEventListener('click',()=>{typeIdx=(typeIdx+1)%types.length;ex.type=types[typeIdx];typeBtn.textContent=typeLabels[ex.type];typeBtn.className=`exbtype ${ex.type}`;syncMeta();});
       // Warmup toggle
       const awBtn=document.createElement('div');awBtn.className='exbc';awBtn.title='Aufwärmen';awBtn.textContent=ex.warmup?'🟢':'⚪';awBtn.style.fontSize='14px';
-      awBtn.addEventListener('click',()=>{ex.warmup=!ex.warmup;awBtn.textContent=ex.warmup?'🟢':'⚪';meta.textContent=`${ex.sets} Sätze · ${ex.type}${ex.warmup?' · AW':''}`;});
+      awBtn.addEventListener('click',()=>{ex.warmup=!ex.warmup;awBtn.textContent=ex.warmup?'🟢':'⚪';syncMeta();});
       // Delete
       const delEx=document.createElement('div');delEx.className='exbdel';delEx.textContent='×';
       delEx.addEventListener('click',()=>{day.exercises.splice(exi,1);renderPBDays();});
@@ -7452,7 +7422,50 @@ function renderPBDays(){
       ctrl.appendChild(minus);ctrl.appendChild(cnt);ctrl.appendChild(plus);ctrl.appendChild(typeBtn);ctrl.appendChild(awBtn);ctrl.appendChild(delEx);
       const topRow=document.createElement('div');topRow.className='exbtoprow';
       topRow.appendChild(exMoveWrap);topRow.appendChild(info);
-      exb.appendChild(topRow);exb.appendChild(ctrl);dbody.appendChild(exb);
+      exb.appendChild(topRow);exb.appendChild(ctrl);
+
+      // Ziel-Wiederholungsbereich — pro Übung, direkt hier editierbar (nicht im Tageskopf)
+      if(!ex.cardio){
+        const rrCtrlRow=document.createElement('div');rrCtrlRow.style.cssText='display:flex;align-items:center;gap:6px';
+        const rrLblEx=document.createElement('div');rrLblEx.className='pauselbl';rrLblEx.style.cssText='flex:0 0 auto;min-width:58px';rrLblEx.textContent='ZIEL-WDH';
+        const rrMinEx=document.createElement('input');rrMinEx.className='pauseinp';rrMinEx.type='number';rrMinEx.inputMode='numeric';rrMinEx.min=1;rrMinEx.max=100;rrMinEx.value=ex.targetRepMin;
+        rrMinEx.style.cssText='flex:1;font-size:14px;padding:6px;font-weight:700;color:var(--green)';
+        const rrSepEx=document.createElement('div');rrSepEx.style.cssText='color:var(--muted2);font-weight:700;font-size:12px';rrSepEx.textContent='–';
+        const rrMaxEx=document.createElement('input');rrMaxEx.className='pauseinp';rrMaxEx.type='number';rrMaxEx.inputMode='numeric';rrMaxEx.min=1;rrMaxEx.max=100;rrMaxEx.value=ex.targetRepMax;
+        rrMaxEx.style.cssText='flex:1;font-size:14px;padding:6px;font-weight:700;color:var(--green)';
+        rrMinEx.addEventListener('change',()=>{
+          let v=parseInt(rrMinEx.value)||1;if(v<1)v=1;
+          ex.targetRepMin=v;
+          if(ex.targetRepMax<v){ex.targetRepMax=v;rrMaxEx.value=v;}
+          rrMinEx.value=v;syncMeta();
+        });
+        rrMaxEx.addEventListener('change',()=>{
+          let v=parseInt(rrMaxEx.value)||ex.targetRepMin;if(v<ex.targetRepMin)v=ex.targetRepMin;
+          ex.targetRepMax=v;rrMaxEx.value=v;syncMeta();
+        });
+        // Trainingstyp (optional, rein für spätere Analyse — keine funktionale Auswirkung)
+        const ttSel=document.createElement('select');ttSel.className='pauseinp';ttSel.style.cssText='flex:1.3;font-size:12px;padding:6px;font-weight:600;color:var(--text)';
+        [['','Typ'],['kraft','Kraft'],['hypertrophie','Hypertrophie'],['pump','Pump'],['custom','Eigene…']].forEach(([val,lbl])=>{
+          const o=document.createElement('option');o.value=val;o.textContent=lbl;
+          if((ex.trainingType||'')===val)o.setAttribute('selected','selected');
+          ttSel.appendChild(o);
+        });
+        ttSel.value=ex.trainingType||'';
+        ttSel.addEventListener('change',()=>{
+          if(ttSel.value==='custom'){
+            const custom=(prompt('Eigener Trainingstyp:',ex.trainingTypeLabel||'')||'').trim();
+            if(custom){ex.trainingType='custom';ex.trainingTypeLabel=custom;}
+            else{ttSel.value=ex.trainingType||'';return;}
+          } else if(ttSel.value){
+            ex.trainingType=ttSel.value;delete ex.trainingTypeLabel;
+          } else {
+            delete ex.trainingType;delete ex.trainingTypeLabel;
+          }
+        });
+        rrCtrlRow.appendChild(rrLblEx);rrCtrlRow.appendChild(rrMinEx);rrCtrlRow.appendChild(rrSepEx);rrCtrlRow.appendChild(rrMaxEx);rrCtrlRow.appendChild(ttSel);
+        exb.appendChild(rrCtrlRow);
+      }
+      dbody.appendChild(exb);
     });
 
     // Add exercise button
@@ -7488,7 +7501,8 @@ function renderPBDays(){
 function openPBExPicker(day){
   _pbExCb=(ex)=>{
     if(!day.exercises)day.exercises=[];
-    day.exercises.push({name:ex.de,sets:3,type:'rir-mv',warmup:day.exercises.length<2,cat:ex.cat,typ:ex.typ});
+    const _pbDefRR=getDefaultRRForDay(day)||{min:8,max:12};
+    day.exercises.push({name:ex.de,sets:3,type:'rir-mv',warmup:day.exercises.length<2,cat:ex.cat,typ:ex.typ,targetRepMin:_pbDefRR.min,targetRepMax:_pbDefRR.max});
     document.getElementById('pbExMov').classList.remove('on');
     renderPBDays();
   };
@@ -7755,37 +7769,37 @@ const PRESET_PLANS = [
     emoji:'⚡',
     days:[
       {name:'Upper Power',icon:'💥',type:'training',exercises:[
-        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
-        {de:'LH Rudern vorgebeugt',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
-        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:3,type:'rir-mv',rrMin:3,rrMax:5},
-        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',rrMin:4,rrMax:6},
-        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:3,type:'rir-mv',rrMin:6,rrMax:8},
-        {de:'Trizepsdrücken Stange (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',rrMin:6,rrMax:8}
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:4,type:'rir-mv',targetRepMin:3,targetRepMax:5},
+        {de:'LH Rudern vorgebeugt',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',targetRepMin:3,targetRepMax:5},
+        {de:'LH Schulterdrücken',cat:'Schulter',typ:'Langhantel',sets:3,type:'rir-mv',targetRepMin:3,targetRepMax:5},
+        {de:'Latzug breit (Kabel)',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:4,targetRepMax:6},
+        {de:'LH Bizepscurl',cat:'Arme',typ:'Langhantel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:8},
+        {de:'Trizepsdrücken Stange (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:8}
       ]},
       {name:'Lower Power',icon:'⚡',type:'training',exercises:[
-        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
-        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',rrMin:3,rrMax:5},
-        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',rrMin:5,rrMax:8},
-        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',rrMin:5,rrMax:8},
-        {de:'Stehendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:6,rrMax:8}
+        {de:'LH Kniebeuge',cat:'Beine',typ:'Langhantel',sets:4,type:'rir-mv',targetRepMin:3,targetRepMax:5},
+        {de:'LH Kreuzheben',cat:'Rücken',typ:'Langhantel',sets:4,type:'rir-mv',targetRepMin:3,targetRepMax:5},
+        {de:'Beinpresse (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:5,targetRepMax:8},
+        {de:'Beinbeugen liegend (Maschine)',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:5,targetRepMax:8},
+        {de:'Stehendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:6,targetRepMax:8}
       ]},
       {name:'Rest',icon:'😴',type:'rest',exercises:[]},
       {name:'Upper Hypertrophie',icon:'🔥',type:'training',exercises:[
-        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',rrMin:8,rrMax:12},
-        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',rrMin:8,rrMax:12},
-        {de:'Butterfly (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',rrMin:10,rrMax:15},
-        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',rrMin:10,rrMax:12},
-        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
-        {de:'Bizepscurl (Maschine)',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',rrMin:10,rrMax:15},
-        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',rrMin:10,rrMax:15}
+        {de:'Brustpresse (Maschine)',cat:'Brust',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:8,targetRepMax:12},
+        {de:'Rudern sitzend (Maschine)',cat:'Rücken',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:8,targetRepMax:12},
+        {de:'Butterfly (Maschine)',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Latzug Maschine breit',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:12},
+        {de:'Seitheben (Maschine)',cat:'Schulter',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Bizepscurl (Maschine)',cat:'Arme',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Trizepsdrücken Seil (Kabel)',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
       ]},
       {name:'Lower Hypertrophie',icon:'🦵',type:'training',exercises:[
-        {de:'Beinpresse weit (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
-        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
-        {de:'Beinbeugen sitzend (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:10,rrMax:15},
-        {de:'LH Sumo Kreuzheben',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv',rrMin:8,rrMax:12},
-        {de:'Adduktor Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',rrMin:12,rrMax:15},
-        {de:'Sitzendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',rrMin:12,rrMax:20}
+        {de:'Beinpresse weit (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Beinstrecken (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Beinbeugen sitzend (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'LH Sumo Kreuzheben',cat:'Beine',typ:'Langhantel',sets:3,type:'rir-mv',targetRepMin:8,targetRepMax:12},
+        {de:'Adduktor Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:12,targetRepMax:15},
+        {de:'Sitzendes Wadenheben (Maschine)',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:12,targetRepMax:20}
       ]},
       {name:'Rest',icon:'😴',type:'rest',exercises:[]},
       {name:'Rest',icon:'😴',type:'rest',exercises:[]},
@@ -7803,11 +7817,30 @@ function loadPresetPlan(idx){
     name:preset.name,
     icon:preset.icon,
     desc:preset.desc,
-    days:preset.days.map(d=>({
-      ...d,
-      id:'d_preset_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
-      exercises:(d.exercises||[]).map(e=>({...e}))
-    }))
+    days:preset.days.map(d=>{
+      const newDay={
+        ...d,
+        id:'d_preset_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),
+        // Bugfix: PRESET_PLANS-Katalogeinträge nutzen (wie DB/getAllDB) das Feld
+        // 'de' für den Übungsnamen, aber jede andere Stelle in der App (Log,
+        // Statistiken, Fortschritt, Export) erwartet 'name'. Ohne diese Zuordnung
+        // hier zeigten importierte Preset-Übungen überall "undefined" als Namen.
+        exercises:(d.exercises||[]).map(e=>({...e,name:e.name||e.de}))
+      };
+      // Übungen aus dem Katalog, die noch keinen fest hinterlegten Zielbereich
+      // hatten, bekommen hier denselben Tages-Heuristik-Default wie neu
+      // angelegte Übungen — damit hat wirklich JEDE Übung nach dem Laden
+      // eines Presets einen konkreten exercise.targetRepMin/targetRepMax.
+      const _presetDefRR=getDefaultRRForDay(newDay)||{min:8,max:12};
+      newDay.exercises.forEach(e=>{
+        if(!(e.targetRepMin&&e.targetRepMax)){
+          e.targetRepMin=e.targetRepMin||_presetDefRR.min;
+          e.targetRepMax=e.targetRepMax||_presetDefRR.max;
+        }
+        delete e.de;
+      });
+      return newDay;
+    })
   };
   const plans=getPlans();
   plans.push(newPlan);
@@ -9004,12 +9037,6 @@ document.getElementById('p-qrsync')?.addEventListener('click',()=>{
 document.getElementById('stypePicker')?.addEventListener('click',function(e){
   if(e.target===this)closeSetTypePicker();
 });
-document.getElementById('rrPicker')?.addEventListener('click',function(e){
-  if(e.target===this){closeRepRangePicker();}
-});
-document.getElementById('rrPicker')?.addEventListener('touchend',function(e){
-  if(e.target===this){e.preventDefault();closeRepRangePicker();}
-},{passive:false});
 document.getElementById('swap-close')?.addEventListener('click',()=>document.getElementById('swapMov').classList.remove('on'));
 document.getElementById('addex-close')?.addEventListener('click',()=>document.getElementById('addExMov').classList.remove('on'));
 document.getElementById('pbex-close')?.addEventListener('click',()=>document.getElementById('pbExMov').classList.remove('on'));
@@ -9040,6 +9067,7 @@ lang=(USER.lang==='es'||USER.lang==='it')?'en':(USER.lang||'de');
 applyTheme(USER.theme||'dark');
 applyLang(lang);
 migrateWeekAssignLabelsV1();
+migrateExerciseRepRangesV1();
 // Einmalige Bereinigung: Progress-Fotos-Feature entfernt — alte Base64-Foto-Daten
 // blieben sonst für immer im Speicher liegen und das eigentliche Ziel (Storage-Risiko
 // beseitigen) wäre verfehlt. Kein Datenverlust an anderer Stelle, da dieses Feature
