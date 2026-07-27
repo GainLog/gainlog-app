@@ -2331,52 +2331,47 @@ function favStarHtml(active,size){
 
 // ══ PLAN SYSTEM ═══════════════════════════════════════════
 const DEFAULT_PLANS=[{
-  id:'p_default',name:'3-Tage Split (Beispiel)',
+  id:'p_default',name:'4-Tage Oberkörper/Unterkörper Split',
   days:[
-    {id:'d1',name:'POWER TAG',icon:'💪',pauseAW:75,pauseWork:180,
+    {id:'d1',name:'Oberkörper A',icon:'💪',pauseAW:75,pauseWork:180,
       exercises:[
-        {name:'Brustpresse (Maschine)',sets:3,type:'rir-mv',warmup:true},
-        {name:'Latzug (Kabel)',sets:3,type:'rir-mv',warmup:true},
-        {name:'T-Bar Rudern',sets:3,type:'rir-mv',warmup:false},
-        {name:'Butterfly (Maschine)',sets:3,type:'all-mv',warmup:false},
-        {name:'Überzüge (Maschine)',sets:3,type:'all-mv',warmup:false},
-        {name:'Bizepscurl (Kurzhantel)',sets:2,type:'all-mv',warmup:false},
-        {name:'Hammer Curl (Kurzhantel)',sets:2,type:'all-mv',warmup:false},
-        {name:'Preacher Curl (Maschine)',sets:2,type:'all-mv',warmup:false},
+        {name:'Gym80 Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {name:'Breiter Latzug zur Brust',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'T-Bar-Rudern',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'Plate Loaded Schrägbank-Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'Reverse Butterfly',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Seitheben an der Maschine',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
       ]},
-    {id:'d2',name:'HYPERTROPHIE',icon:'📈',pauseAW:60,pauseWork:105,
+    {id:'d2',name:'Unterkörper A',icon:'🦵',pauseAW:75,pauseWork:180,
       exercises:[
-        {name:'Latzug (Kabel)',sets:3,type:'rir-mv',warmup:true},
-        {name:'Brustpresse (Maschine)',sets:3,type:'rir-mv',warmup:true},
-        {name:'Schulterpresse (Maschine)',sets:3,type:'rir-mv',warmup:false},
-        {name:'Rudern sitzend (Maschine)',sets:3,type:'rir-mv',warmup:false},
-        {name:'Butterfly (Maschine)',sets:3,type:'all-mv',warmup:false},
-        {name:'Seitheben (Maschine)',sets:3,type:'all-mv',warmup:false},
-        {name:'Trizepsdrücken Seil (Kabel)',sets:2,type:'all-mv',warmup:false},
-        {name:'Dip Maschine',sets:2,type:'all-mv',warmup:false},
-        {name:'Bizepscurl (Kurzhantel)',sets:2,type:'all-mv',warmup:false},
-        {name:'Hammer Curl (Kurzhantel)',sets:2,type:'all-mv',warmup:false},
+        {name:'Plate Loaded Beinpresse',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {name:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Wadenheben an der Maschine',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Bauchmaschine',cat:'Core',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
       ]},
-    {id:'d3',name:'PUMP TAG',icon:'🔥',pauseAW:60,pauseWork:67,
+    {id:'d3',name:'Oberkörper B',icon:'🔥',pauseAW:75,pauseWork:180,
       exercises:[
-        {name:'Überzüge (Maschine)',sets:3,type:'all-mv',warmup:true},
-        {name:'Butterfly (Maschine)',sets:3,type:'all-mv',warmup:true},
-        {name:'Latzug (Kabel)',sets:3,type:'all-mv',warmup:false},
-        {name:'Seitheben (Maschine)',sets:3,type:'all-mv',warmup:false},
-        {name:'Preacher Curl (Maschine)',sets:2,type:'all-mv',warmup:false},
-        {name:'Hammer Curl (Kurzhantel)',sets:2,type:'all-mv',warmup:false},
-        {name:'Trizepsdrücken Seil (Kabel)',sets:2,type:'all-mv',warmup:false},
+        {name:'Iso-Lateral Rudermaschine',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {name:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'Enges Kabelrudern',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'Neutraler enger Latzug',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'Butterfly',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Schulterdrücken an der Maschine',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:6,targetRepMax:10},
+        {name:'Kabel-Bizepscurls',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Kabel-Trizepsdrücken',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
       ]},
-    {id:'d4',name:'BEINE + WADEN',icon:'🦵',pauseAW:75,pauseWork:180,
+    {id:'d4',name:'Unterkörper B + Arme',icon:'⚡',pauseAW:75,pauseWork:180,
       exercises:[
-        {name:'Beinpresse (Maschine)',sets:3,type:'rir-mv',warmup:true},
-        {name:'Beinstrecken (Maschine)',sets:2,type:'all-mv',warmup:true},
-        {name:'Beinbeugen liegend',sets:2,type:'all-mv',warmup:false},
-        {name:'Hüftadduktion (Maschine)',sets:2,type:'all-mv',warmup:false},
-        {name:'Stehendes Wadenheben',sets:3,type:'all-mv',warmup:false},
-        {name:'Bizepscurl (Kurzhantel)',sets:3,type:'all-mv',warmup:false},
-        {name:'Hammer Curl (Kurzhantel)',sets:3,type:'all-mv',warmup:false},
-        {name:'Preacher Curl (Maschine)',sets:2,type:'all-mv',warmup:false},
+        {name:'Plate Loaded Beinpresse',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {name:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Adduktorenmaschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Abduktorenmaschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Wadenheben an der Maschine',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Kabel-Bizepscurls',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Kabel-Trizepsdrücken',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
+        {name:'Bauchmaschine',cat:'Core',typ:'Maschine',sets:3,type:'rir-mv',warmup:false,targetRepMin:10,targetRepMax:15},
       ]},
   ]
 }];
@@ -7570,6 +7565,53 @@ function savePlan(){
 
 // ══ PRESET PLANS ══════════════════════════════════════════
 const PRESET_PLANS = [
+  {
+    name:'4-Tage Oberkörper/Unterkörper Split',
+    icon:'🏆',
+    desc:'Standard-Trainingsplan. Double Progression mit 1–2 RIR, letzter Satz bis 0 RIR. Mo/Di/Do/Fr Training.',
+    emoji:'🏆',
+    days:[
+      {name:'Oberkörper A',icon:'💪',type:'training',exercises:[
+        {de:'Gym80 Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Breiter Latzug zur Brust',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'T-Bar-Rudern',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Plate Loaded Schrägbank-Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Reverse Butterfly',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Seitheben an der Maschine',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Unterkörper A',icon:'🦵',type:'training',exercises:[
+        {de:'Plate Loaded Beinpresse',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Wadenheben an der Maschine',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Bauchmaschine',cat:'Core',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Oberkörper B',icon:'🔥',type:'training',exercises:[
+        {de:'Iso-Lateral Rudermaschine',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Enges Kabelrudern',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Neutraler enger Latzug',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Butterfly',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Schulterdrücken an der Maschine',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Kabel-Bizepscurls',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Kabel-Trizepsdrücken',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Unterkörper B + Arme',icon:'⚡',type:'training',exercises:[
+        {de:'Plate Loaded Beinpresse',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Adduktorenmaschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Abduktorenmaschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Wadenheben an der Maschine',cat:'Beine',typ:'Maschine',sets:4,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Kabel-Bizepscurls',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Kabel-Trizepsdrücken',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Bauchmaschine',cat:'Core',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  },
   {
     name:'3-Tage Ganzkörper',
     icon:'💪',
