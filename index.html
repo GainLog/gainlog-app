@@ -1743,6 +1743,21 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
   </div>
 </div>
 
+<!-- REP RANGE EDITOR (pro Übung, aus der Log-Ansicht) -->
+<div class="stype-picker" id="rrEditMov">
+  <div class="stype-sheet">
+    <div class="stype-title">ZIEL-WIEDERHOLUNGSBEREICH</div>
+    <div class="stype-grid" id="rr-edit-presets" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px"></div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:8px;font-weight:700">EIGENER BEREICH:</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <input type="number" id="rr-edit-min" inputmode="numeric" min="1" max="100" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:12px;text-align:center;font-size:18px;font-weight:700;color:var(--green);outline:none">
+      <span style="color:var(--muted2);font-weight:700">–</span>
+      <input type="number" id="rr-edit-max" inputmode="numeric" min="1" max="100" style="flex:1;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;padding:12px;text-align:center;font-size:18px;font-weight:700;color:var(--green);outline:none">
+      <button id="rr-edit-apply" style="background:var(--blue);border:none;border-radius:10px;color:#fff;font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:1px;padding:12px 18px;cursor:pointer;white-space:nowrap">OK</button>
+    </div>
+  </div>
+</div>
+
 <!-- WORKOUT SUMMARY -->
 <!-- WORKOUT HISTORY MODAL -->
 <div class="mov" id="historyMov">
@@ -2918,6 +2933,71 @@ function closeSetTypePicker(){
   _stPickerCb=null;
 }
 
+// ══ REP RANGE EDITOR (Log-Ansicht, pro Übung) ═══════════════════════
+// Schreibt direkt auf exercise.targetRepMin/targetRepMax in der gespeicherten
+// Plan-Struktur (einzige Quelle der Wahrheit, siehe getExerciseRR). "day"/"plan"
+// in renderTrainingDayDetail sind Snapshots aus getActivePlan() — daher hier
+// bewusst frisch aus getPlans() holen statt den Snapshot zu mutieren.
+let _rrEditCtx=null;
+const RR_EDIT_PRESETS=[{min:3,max:6},{min:6,max:10},{min:8,max:12},{min:10,max:15}];
+
+function saveExerciseRR(pid,did,ei,min,max){
+  const plans=getPlans();
+  const pl=plans.find(p=>p.id===pid);
+  const dy=pl&&pl.days.find(d=>d.id===did);
+  const ex=dy&&dy.exercises&&dy.exercises[ei];
+  if(!ex)return false;
+  ex.targetRepMin=min;ex.targetRepMax=max;
+  savePlans(plans);
+  return true;
+}
+
+function openRREditSheet(pid,did,ei,day){
+  const ex=day&&day.exercises&&day.exercises[ei];
+  const cur=getExerciseRR(ex,day);
+  _rrEditCtx={pid,did,ei};
+  const picker=document.getElementById('rrEditMov');
+  if(!picker)return;
+  const grid=document.getElementById('rr-edit-presets');
+  grid.innerHTML='';
+  RR_EDIT_PRESETS.forEach(p=>{
+    const opt=document.createElement('div');
+    opt.className='stype-opt';
+    opt.style.justifyContent='center';
+    opt.style.fontWeight='700';
+    opt.style.color=(cur.min===p.min&&cur.max===p.max)?'var(--green)':'var(--text)';
+    if(cur.min===p.min&&cur.max===p.max)opt.style.borderColor='var(--green)';
+    opt.textContent=p.min+'–'+p.max;
+    opt.addEventListener('click',()=>{
+      if(saveExerciseRR(pid,did,ei,p.min,p.max)){closeRREditSheet();renderLog();}
+    });
+    grid.appendChild(opt);
+  });
+  document.getElementById('rr-edit-min').value=cur.min;
+  document.getElementById('rr-edit-max').value=cur.max;
+  picker.classList.add('on');
+}
+function closeRREditSheet(){
+  const picker=document.getElementById('rrEditMov');
+  if(picker)picker.classList.remove('on');
+  _rrEditCtx=null;
+}
+document.getElementById('rr-edit-apply')?.addEventListener('click',()=>{
+  if(!_rrEditCtx)return;
+  let min=parseInt(document.getElementById('rr-edit-min').value,10);
+  let max=parseInt(document.getElementById('rr-edit-max').value,10);
+  if(isNaN(min)||min<1)min=1;
+  if(isNaN(max)||max<min)max=min;
+  if(saveExerciseRR(_rrEditCtx.pid,_rrEditCtx.did,_rrEditCtx.ei,min,max)){
+    closeRREditSheet();
+    renderLog();
+    toast('✅ Zielbereich aktualisiert');
+  }
+});
+document.getElementById('rrEditMov')?.addEventListener('click',function(e){
+  if(e.target===this)closeRREditSheet();
+});
+
 function genSets(count,type){
   const sets=[];
   for(let i=0;i<count;i++){
@@ -3620,7 +3700,7 @@ function checkLicenseOnStart(){
   if(licEl){
     licEl.style.display='flex';
     // Close any open modals/pickers that might show through
-    ['stypePicker','swapMov','addExMov','qrMov','summaryMov','weekMov'].forEach(id=>{
+    ['stypePicker','rrEditMov','swapMov','addExMov','qrMov','summaryMov','weekMov'].forEach(id=>{
       const el=document.getElementById(id);
       if(el){el.classList.remove('on');el.style.display='none';}
     });
@@ -5107,9 +5187,10 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
         kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);showSetFeedback(pid,did,ei,si,day);refreshGhostRow(pid,did,ei,si,week);refreshGhostAggregate(pid,did,week,ei);});
       }
       const wC=_uniMode?null:makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();checkPR(pid,did,ei,day);showSetFeedback(pid,did,ei,si,day);refreshGhostRow(pid,did,ei,si,week);refreshGhostAggregate(pid,did,week,ei);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
-      // Rep Range hint (replaces notiz field)
+      // Rep Range hint (replaces notiz field) — antippbar, öffnet Editor für diese Übung
       const rrHint=document.createElement('div');
-      rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:default';
+      rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:pointer';
+      rrHint.addEventListener('click',()=>openRREditSheet(pid,did,ei,day));
       function updateRRHint(){
         const _rrEx=getExerciseRR(day&&day.exercises&&day.exercises[ei],day);
         rrHint.innerHTML='<div style="font-size:8px;color:#555;letter-spacing:.5px">RANGE</div><div class="rr-hint-val" style="font-size:12px;font-weight:800;color:var(--green)">'+_rrEx.min+'–'+_rrEx.max+'</div>';
