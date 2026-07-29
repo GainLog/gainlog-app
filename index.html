@@ -8241,6 +8241,55 @@ function savePlan(){
 // ══ PRESET PLANS ══════════════════════════════════════════
 const PRESET_PLANS = [
   {
+    name:'Neuer 4er Split',
+    icon:'🏋️',
+    desc:'4-Tage-Split mit Bankdrücken, Dips & Bauchtraining. Mo/Di/Do/Fr, Arbeitssätze meist 1–2 RIR, Double Progression.',
+    emoji:'🏋️',
+    days:[
+      {name:'Oberkörper A',icon:'💪',type:'training',exercises:[
+        {de:'LH Bankdrücken flach',cat:'Brust',typ:'Langhantel',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Breiter Latzug zur Brust',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'T-Bar-Rudern',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Gym80 Brustpresse',cat:'Brust',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:8,targetRepMax:12},
+        {de:'Plate Loaded Schrägbank-Brustpresse',cat:'Brust',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:8,targetRepMax:12},
+        {de:'Reverse Butterfly',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Seitheben an der Maschine',cat:'Schulter',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Unterkörper A',icon:'🦵',type:'training',exercises:[
+        {de:'Plate Loaded Beinpresse',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Wadenheben an der Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Bauchmuskelmaschine',cat:'Core',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Oberkörper B',icon:'🔥',type:'training',exercises:[
+        {de:'Iso-Laterale Rudermaschine',cat:'Rücken',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Plate Loaded Brustpresse',cat:'Brust',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Enges Kabelrudern',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Neutraler enger Latzug',cat:'Rücken',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Dip Maschine',cat:'Trizeps',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:8,targetRepMax:12},
+        {de:'Butterfly',cat:'Brust',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Schulterdrücken an der Maschine',cat:'Schulter',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:6,targetRepMax:10},
+        {de:'Kabel-Bizepscurls',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Kabel-Trizepsdrücken',cat:'Arme',typ:'Kabel',sets:2,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Unterkörper B + Arme',icon:'⚡',type:'training',exercises:[
+        {de:'Plate Loaded Beinpresse',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',warmup:true,targetRepMin:6,targetRepMax:10},
+        {de:'Beinbeuger',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Beinstrecker',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Adduktorenmaschine',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Abduktorenmaschine',cat:'Beine',typ:'Maschine',sets:2,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Wadenheben an der Maschine',cat:'Beine',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Kabel-Bizepscurls',cat:'Arme',typ:'Kabel',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Kabel-Trizepsdrücken',cat:'Arme',typ:'Kabel',sets:2,type:'rir-mv',targetRepMin:10,targetRepMax:15},
+        {de:'Bauchmuskelmaschine',cat:'Core',typ:'Maschine',sets:3,type:'rir-mv',targetRepMin:10,targetRepMax:15}
+      ]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]},
+      {name:'Rest',icon:'😴',type:'rest',exercises:[]}
+    ]
+  },
+  {
     name:'4-Tage Oberkörper/Unterkörper Split',
     icon:'🏆',
     desc:'Standard-Trainingsplan. Double Progression mit 1–2 RIR, letzter Satz bis 0 RIR. Mo/Di/Do/Fr Training.',
