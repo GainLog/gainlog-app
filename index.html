@@ -1780,6 +1780,16 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
   </div>
 </div>
 
+<!-- WORKOUT DRAFT RECOVERY MODAL -->
+<div class="mov" id="draftRecoveryMov">
+  <div class="msheet" style="max-height:85vh">
+    <div class="mhdr">
+      <div class="mtit">NICHT ABGESCHLOSSENES TRAINING GEFUNDEN</div>
+    </div>
+    <div class="mlist" style="padding:16px" id="draft-recovery-body"></div>
+  </div>
+</div>
+
 <!-- FIREBASE SYNC MODAL -->
 <div class="mov" id="qrMov">
   <div class="msheet" style="max-height:92vh">
@@ -2524,7 +2534,7 @@ function exportFullBackup(){
     const fullKey=localStorage.key(i);
     if(fullKey.indexOf('gl_')===0)data[fullKey.slice(3)]=localStorage.getItem(fullKey);
   }
-  const exportObj={type:'gainlog_full_backup',version:1,exportedAt:new Date().toISOString(),data};
+  const exportObj=wrapExport('full-backup',data);
   const blob=new Blob([JSON.stringify(exportObj)],{type:'application/json'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
@@ -2536,13 +2546,17 @@ function exportFullBackup(){
 function importFullBackup(file){
   const reader=new FileReader();
   reader.onload=e=>{
+    // Zentrale Validierung statt eigener Ad-hoc-Prüfung -- erkennt neues
+    // (schemaVersion 2) UND altes (type:'gainlog_full_backup', version:1)
+    // Format, sowie falschen Dateityp (z.B. versehentlich eine Plan- oder
+    // Tages-Datei hier importiert).
+    const result=parseGainLogImport(e.target.result,'full-backup');
+    if(!result.valid){toast('❌ '+result.error);console.error(result.error);return;}
     try{
-      const obj=JSON.parse(e.target.result);
-      if(!obj||obj.type!=='gainlog_full_backup'||!obj.data)throw new Error('invalid');
-      const dateStr=obj.exportedAt?new Date(obj.exportedAt).toLocaleDateString('de-DE'):'unbekanntem Datum';
+      const dateStr=result.exportedAt?new Date(result.exportedAt).toLocaleDateString('de-DE'):'unbekanntem Datum';
       if(!confirm('Vollbackup vom '+dateStr+' wiederherstellen?\n\nDein aktueller Stand wird vorher automatisch zusätzlich gesichert (Struktur-Backup). Die App lädt danach neu.'))return;
       createAutoBackup('Vor Vollbackup-Import');
-      Object.keys(obj.data).forEach(k=>{localStorage.setItem('gl_'+k,obj.data[k]);});
+      Object.keys(result.data).forEach(k=>{localStorage.setItem('gl_'+k,result.data[k]);});
       toast('✅ Backup importiert — App wird neu geladen');
       setTimeout(()=>location.reload(),700);
     }catch(err){toast('❌ Ungültige Backup-Datei');console.error(err);}
@@ -3952,7 +3966,22 @@ async function fbObImport(){
 }
 
 // ══ AKTUELLER TRAININGSTAG (Persistenz) ════════════════════
-function setCurrentDay(id){currentDayId=id;try{localStorage.setItem('gl_current_day',id);}catch(e){}}
+function setCurrentDay(id){
+  currentDayId=id;try{localStorage.setItem('gl_current_day',id);}catch(e){}
+  // Falls bereits ein aktiver Trainings-Entwurf existiert, auf den neuen Tag "mitziehen" --
+  // NUR wenn tatsächlich schon ein persistenter Entwurf vorhanden ist (getWorkoutDraft prüft
+  // echten localStorage-Inhalt, nicht nur eine Session-Variable). Das verhindert, dass normale
+  // Navigation oder der App-Start selbst versehentlich einen Entwurf aus dem Nichts erzeugt --
+  // die Anforderung "Wechsel des Trainingstages während eines aktiven Trainings" betrifft
+  // ausdrücklich nur den Fall, dass BEREITS aktiv trainiert wird.
+  if(typeof getWorkoutDraft==='function'){
+    const existingDraft=getWorkoutDraft();
+    if(existingDraft){
+      const plan=getActivePlan();
+      if(plan)updateWorkoutDraftNow(plan.id,id,currentWeek);
+    }
+  }
+}
 function loadCurrentDay(){try{return localStorage.getItem('gl_current_day');}catch(e){return null;}}
 // ══ AUDIO ════════════════════════════════════════════════
 let _ti=null,_tt=0,_tl=0; // pause timer state
@@ -4890,6 +4919,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       removeExerciseAtIndex(_rmPid,_rmDid,_rmEi,dy.exercises.length);
       dy.exercises.splice(_rmEi,1);
       savePlans(plans);
+      updateWorkoutDraftNow(_rmPid,_rmDid,week);
       toast('🗑️ '+_rmName+' entfernt');
       renderLog();
       return;
@@ -4900,6 +4930,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       removeExerciseAtIndex(_rmPid,_rmDid,idx,dy.exercises.length);
       dy.exercises.splice(idx,1);
       savePlans(plans);
+      updateWorkoutDraftNow(_rmPid,_rmDid,week);
       toast('🗑️ '+_rmName+' entfernt');
       renderLog();
     } else {
@@ -5023,8 +5054,8 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
         const sKg=S.g(kgK)||'',sW=S.g(wK)||aw.wdh;
         const row=document.createElement('div');row.className='srow';
         const bdg=document.createElement('div');bdg.className='sbdg sb-aw';bdg.textContent=`AW${ai+1}`;
-        const kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v)});
-        const wC=makeSinp('number','numeric',aw.wdh,sW,v=>{S.s(wK,v)});
+        const kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);scheduleWorkoutDraftUpdate(pid,did,week);});
+        const wC=makeSinp('number','numeric',aw.wdh,sW,v=>{S.s(wK,v);scheduleWorkoutDraftUpdate(pid,did,week);});
         const infC=document.createElement('div');infC.className='scol';
         const infB=document.createElement('div');infB.className='sinp';
         infB.style.cssText='font-size:9px;color:var(--muted);display:flex;align-items:center;justify-content:center;height:37px';
@@ -5052,7 +5083,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       awABtn.textContent='+ Aufwärmsatz';
       awABtn.addEventListener('click',()=>{
         if(awCnt>=6){toast('⚠️ Maximal 6 Aufwärmsätze');return;}
-        S.s(K.awcnt(pid,did,ei),awCnt+1);buildAwSets();
+        S.s(K.awcnt(pid,did,ei),awCnt+1);buildAwSets();updateWorkoutDraftNow(pid,did,week);
       });
       const awRBtn=document.createElement('button');
       awRBtn.style.cssText='flex:1;padding:7px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red);font-family:"DM Sans",sans-serif;font-size:12px;font-weight:700;cursor:pointer';
@@ -5060,7 +5091,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
       awRBtn.addEventListener('click',()=>{
         if(awCnt<=1)return;
         S.d(K.aw(pid,did,week,ei,awCnt-1,'kg'));S.d(K.aw(pid,did,week,ei,awCnt-1,'wdh'));
-        S.s(K.awcnt(pid,did,ei),awCnt-1);buildAwSets();
+        S.s(K.awcnt(pid,did,ei),awCnt-1);buildAwSets();updateWorkoutDraftNow(pid,did,week);
       });
       awCr.appendChild(awABtn);awCr.appendChild(awRBtn);awSc.appendChild(awCr);
     }
@@ -5134,6 +5165,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
             +'<div class="stype-info"><div class="name">'+t.name+'</div><div class="desc">'+t.desc+'</div></div>';
           opt.addEventListener('click',()=>{
             S.s(KsetType(pid,did,ei,si),t.id);
+            scheduleWorkoutDraftUpdate(pid,did,week);
             closeSetTypePicker();
             // Update badge visually without full re-render
             bdg.className='sbdg '+t.cls;
@@ -5141,6 +5173,7 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
           });
           opt.addEventListener('touchend',function(e){e.preventDefault();
             S.s(KsetType(pid,did,ei,si),t.id);
+            scheduleWorkoutDraftUpdate(pid,did,week);
             closeSetTypePicker();
             bdg.className='sbdg '+t.cls;
             bdg.textContent=t.label;
@@ -5163,11 +5196,11 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
         kgC.style.cssText='display:flex;flex-direction:column;gap:3px;flex:1';
         const kgLRow=document.createElement('div');kgLRow.style.cssText='display:flex;align-items:center;gap:3px';
         const kgLLabel=document.createElement('span');kgLLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';kgLLabel.textContent='L';
-        const kgLInput=makeSinp('number','decimal','kg',sKgL,v=>{S.s(kgLK,v);checkPR(pid,did,ei,day);});
+        const kgLInput=makeSinp('number','decimal','kg',sKgL,v=>{S.s(kgLK,v);checkPR(pid,did,ei,day);scheduleWorkoutDraftUpdate(pid,did,week);});
         kgLRow.appendChild(kgLLabel);kgLRow.appendChild(kgLInput);
         const kgRRow=document.createElement('div');kgRRow.style.cssText='display:flex;align-items:center;gap:3px';
         const kgRLabel=document.createElement('span');kgRLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';kgRLabel.textContent='R';
-        const kgRInput=makeSinp('number','decimal','kg',sKgR,v=>{S.s(kgRK,v);checkPR(pid,did,ei,day);});
+        const kgRInput=makeSinp('number','decimal','kg',sKgR,v=>{S.s(kgRK,v);checkPR(pid,did,ei,day);scheduleWorkoutDraftUpdate(pid,did,week);});
         kgRRow.appendChild(kgRLabel);kgRRow.appendChild(kgRInput);
         kgC.appendChild(kgLRow);kgC.appendChild(kgRRow);
         // Wdh L/R
@@ -5175,18 +5208,18 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
         wC_uni.style.cssText='display:flex;flex-direction:column;gap:3px;flex:1';
         const wLRow=document.createElement('div');wLRow.style.cssText='display:flex;align-items:center;gap:3px';
         const wLLabel=document.createElement('span');wLLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';wLLabel.textContent='L';
-        const wLInput=makeSinp('number','numeric',t('reps'),sWL,v=>{S.s(wLK,v);update1RM();checkPR(pid,did,ei,day);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+        const wLInput=makeSinp('number','numeric',t('reps'),sWL,v=>{S.s(wLK,v);update1RM();checkPR(pid,did,ei,day);scheduleWorkoutDraftUpdate(pid,did,week);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
         wLRow.appendChild(wLLabel);wLRow.appendChild(wLInput);
         const wRRow=document.createElement('div');wRRow.style.cssText='display:flex;align-items:center;gap:3px';
         const wRLabel=document.createElement('span');wRLabel.style.cssText='font-size:9px;color:#f59e0b;font-weight:700;min-width:10px';wRLabel.textContent='R';
-        const wRInput=makeSinp('number','numeric',t('reps'),sWR,v=>{S.s(wRK,v);update1RM();checkPR(pid,did,ei,day);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+        const wRInput=makeSinp('number','numeric',t('reps'),sWR,v=>{S.s(wRK,v);update1RM();checkPR(pid,did,ei,day);scheduleWorkoutDraftUpdate(pid,did,week);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
         wRRow.appendChild(wRLabel);wRRow.appendChild(wRInput);
         wC_uni.appendChild(wLRow);wC_uni.appendChild(wRRow);
         row.appendChild(bdg);row.appendChild(kgC);row.appendChild(wC_uni);
       } else {
-        kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);showSetFeedback(pid,did,ei,si,day);refreshGhostRow(pid,did,ei,si,week);refreshGhostAggregate(pid,did,week,ei);});
+        kgC=makeSinp('number','decimal','kg',sKg,v=>{S.s(kgK,v);checkPR(pid,did,ei,day);showSetFeedback(pid,did,ei,si,day);refreshGhostRow(pid,did,ei,si,week);refreshGhostAggregate(pid,did,week,ei);scheduleWorkoutDraftUpdate(pid,did,week);});
       }
-      const wC=_uniMode?null:makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();checkPR(pid,did,ei,day);showSetFeedback(pid,did,ei,si,day);refreshGhostRow(pid,did,ei,si,week);refreshGhostAggregate(pid,did,week,ei);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
+      const wC=_uniMode?null:makeSinp('number','numeric',t('reps'),sW,v=>{S.s(wK,v);update1RM();checkPR(pid,did,ei,day);showSetFeedback(pid,did,ei,si,day);refreshGhostRow(pid,did,ei,si,week);refreshGhostAggregate(pid,did,week,ei);scheduleWorkoutDraftUpdate(pid,did,week);},el=>checkWdhInRange(el,pid,did,week,ei,si,day));
       // Rep Range hint (replaces notiz field) — antippbar, öffnet Editor für diese Übung
       const rrHint=document.createElement('div');
       rrHint.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px 6px;min-width:64px;cursor:pointer';
@@ -5291,11 +5324,11 @@ function buildExCard(plan,day,ex,ei,pid,did,week,minimal){
     const aBtn=document.createElement('button');
     aBtn.style.cssText='flex:1;padding:8px;border-radius:8px;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:var(--green);font-family:"DM Sans",sans-serif;font-size:13px;font-weight:700;cursor:pointer';
     aBtn.textContent='+ Satz';
-    aBtn.addEventListener('click',()=>{S.s(K.csets(pid,did,ei),cnt+1);buildSets();});
+    aBtn.addEventListener('click',()=>{S.s(K.csets(pid,did,ei),cnt+1);buildSets();updateWorkoutDraftNow(pid,did,week);});
     const rBtn=document.createElement('button');
     rBtn.style.cssText='flex:1;padding:8px;border-radius:8px;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red);font-family:"DM Sans",sans-serif;font-size:13px;font-weight:700;cursor:pointer';
     rBtn.textContent='− Satz';
-    rBtn.addEventListener('click',()=>{if(cnt<=1)return;S.d(K.set(pid,did,week,ei,cnt-1,'kg'));S.d(K.set(pid,did,week,ei,cnt-1,'wdh'));S.s(K.csets(pid,did,ei),cnt-1);buildSets();});
+    rBtn.addEventListener('click',()=>{if(cnt<=1)return;S.d(K.set(pid,did,week,ei,cnt-1,'kg'));S.d(K.set(pid,did,week,ei,cnt-1,'wdh'));S.s(K.csets(pid,did,ei),cnt-1);buildSets();updateWorkoutDraftNow(pid,did,week);});
     cr.appendChild(aBtn);cr.appendChild(rBtn);sc.appendChild(cr);
   }
   buildSets();
@@ -6161,7 +6194,7 @@ function renderTrainingDayDetail(pid,did,week){
   const tnArea=document.createElement('textarea');
   tnArea.style.cssText='width:100%;box-sizing:border-box;background:var(--surface);border:1px solid var(--border);border-radius:12px;color:var(--text);font-size:13px;padding:10px 12px;min-height:70px;resize:none;font-family:inherit;line-height:1.5';
   tnArea.placeholder='Notizen zum Training...';tnArea.value=S.g(tnKey)||'';
-  tnArea.addEventListener('input',()=>S.s(tnKey,tnArea.value));
+  tnArea.addEventListener('input',()=>{S.s(tnKey,tnArea.value);scheduleWorkoutDraftUpdate(pid,did,week);});
   tnDiv.appendChild(tnArea);
   ct.appendChild(tnDiv);
 
@@ -6177,6 +6210,11 @@ function renderTrainingDayDetail(pid,did,week){
     S.s(K.saved(pid,did,week),s2);
     saveAllWorkoutPRs(pid,did,week);
     saveWorkoutHistory(pid,did,week);
+    // Training ist jetzt abgeschlossen -- updateWorkoutDraftNow erkennt automatisch, dass
+    // K.saved für diese Plan/Tag/Woche-Kombination gesetzt ist, und löscht einen dazu
+    // passenden offenen Entwurf (siehe workout-draft.js, gleiche Logik wie beim regulären
+    // Speichern, keine doppelte Lösch-Logik nötig).
+    updateWorkoutDraftNow(pid,did,week);
     document.getElementById('texp-savets').textContent='✅ '+s2;
     updateDash();toast(t('saved'));
   });
@@ -6456,6 +6494,293 @@ function checkPR(pid,did,ei,day,silent=false){
   }
 }
 
+// ══ WORKOUT-ENTWURF: AUTOMATISCHE SICHERUNG & WIEDERHERSTELLUNG ═══
+// Ziel: Ein laufendes, nicht abgeschlossenes Training darf bei Neuladen,
+// Browserabsturz, Tab-Schließen oder Geräte-Neustart nicht verloren gehen.
+//
+// WICHTIG -- Architekturentscheidung: Dieses Modul erzeugt KEINE zweite,
+// unabhängige Datenquelle für Trainingsdaten. Gewicht/Wiederholungen/Satztyp
+// etc. werden bereits bei jeder Eingabe live über K.set/K.aw/KsetType/...
+// in localStorage geschrieben (siehe migrations.js) -- das ist die einzige
+// Quelle der Wahrheit. Der "Entwurf" hier ist ein leichtgewichtiger
+// Metadaten-Zeiger ("es gibt ein unfertiges Training bei Plan X/Tag Y/Woche Z,
+// zuletzt aktualisiert um HH:MM") PLUS ein redundanter Anzeige-Snapshot
+// (für den Wiederherstellungs-Dialog: "12 Sätze bereits erfasst"). Die
+// eigentliche Wiederherstellung beim Klick auf "Training fortsetzen"
+// navigiert einfach zu Plan/Tag/Woche zurück und lässt die bestehende
+// Render-Pipeline (renderLog) die längst gespeicherten K.set-Werte laden --
+// es wird NICHTS aus dem Entwurf-Snapshot zurückgeschrieben.
+
+const WORKOUT_DRAFT_KEY = 'active_workout_draft_v1'; // wird von S.g/S.s automatisch mit gl_ präfixiert
+const WORKOUT_DRAFT_SCHEMA_VERSION = 1;
+const WORKOUT_DRAFT_DEBOUNCE_MS = 800; // drosselt häufige Texteingaben (Gewicht/Wdh/Notiz)
+
+let _workoutDraftDebounceTimer = null;
+let _workoutDraftLastCtx = null; // {pid,did,week} -- für sofortiges Flushen bei beforeunload/visibilitychange
+
+// ── Snapshot-Aufbau ─────────────────────────────────────────────────────
+// Liest AUSSCHLIESSLICH aus bereits bestehenden K.*-Keys. Erfasst nur Sätze/
+// Aufwärmsätze, die tatsächlich einen Wert haben (kein "leeres Rauschen").
+function buildWorkoutDraftSnapshot(pid, did, week) {
+  const plans = getPlans();
+  const plan = plans.find(p => p.id === pid);
+  if (!plan) return null;
+  const day = plan.days.find(d => d.id === did);
+  if (!day) return null;
+
+  let setsCompletedCount = 0;
+  const exercises = (day.exercises || []).map((ex, ei) => {
+    const cnt = getSetCount(pid, did, ei, ex.sets || 3);
+    const sets = [];
+    for (let si = 0; si < cnt; si++) {
+      const kg = S.g(K.set(pid, did, week, ei, si, 'kg'));
+      const wdh = S.g(K.set(pid, did, week, ei, si, 'wdh'));
+      const kgL = S.g(K.set(pid, did, week, ei, si, 'kgL'));
+      const kgR = S.g(K.set(pid, did, week, ei, si, 'kgR'));
+      const wdhL = S.g(K.set(pid, did, week, ei, si, 'wdhL'));
+      const wdhR = S.g(K.set(pid, did, week, ei, si, 'wdhR'));
+      const stype = S.g(KsetType(pid, did, ei, si));
+      const hasAny = kg != null || wdh != null || kgL != null || kgR != null || wdhL != null || wdhR != null;
+      if (!hasAny) continue;
+      sets.push({ si, kg, wdh, kgL, kgR, wdhL, wdhR, stype });
+      const isComplete = (kg && wdh) || (kgL && wdhL) || (kgR && wdhR);
+      if (isComplete) setsCompletedCount++;
+    }
+    const awCnt = getAwCount(pid, did, ei, 3);
+    const warmupSets = [];
+    for (let ai = 0; ai < awCnt; ai++) {
+      const kg = S.g(K.aw(pid, did, week, ei, ai, 'kg'));
+      const wdh = S.g(K.aw(pid, did, week, ei, ai, 'wdh'));
+      if (kg == null && wdh == null) continue;
+      warmupSets.push({ ai, kg, wdh });
+    }
+    return { ei, name: ex.name, warmup: !!ex.warmup, sets, warmupSets };
+  });
+
+  const tnKey = 'tagesnotiz_' + pid + '_' + did + '_w' + week;
+  const notes = S.g(tnKey) || '';
+
+  const dayInfo = resolveDayInfo(pid, did, day.name, day.icon);
+
+  return {
+    planName: plan.name || 'Plan',
+    dayName: dayInfo.name,
+    notes,
+    exercises,
+    setsCompletedCount,
+    timer: {
+      wstart: S.g(K.wstart(pid, did, week)),
+      wend: S.g(K.wend(pid, did, week)),
+      wpause: S.gj(K.wpause(pid, did, week))
+    }
+  };
+}
+
+// ── Speichern (gedrosselt) ──────────────────────────────────────────────
+// Wird von allen relevanten Änderungsstellen aufgerufen (Gewicht/Wdh/RIR-
+// Eingabe, Satz hinzufügen/löschen, Übung ersetzen/hinzufügen/entfernen,
+// Notizänderung, Tageswechsel während aktivem Training).
+function scheduleWorkoutDraftUpdate(pid, did, week) {
+  if (!pid || !did || !week) return;
+  _workoutDraftLastCtx = { pid, did, week };
+  clearTimeout(_workoutDraftDebounceTimer);
+  _workoutDraftDebounceTimer = setTimeout(() => {
+    updateWorkoutDraftNow(pid, did, week);
+  }, WORKOUT_DRAFT_DEBOUNCE_MS);
+}
+
+// Sofortige, ungedrosselte Sicherung -- für Satzabschluss, Übung hinzufügen/
+// entfernen/tauschen (diskrete Aktionen, kein Tippen) sowie für den
+// beforeunload/visibilitychange-Notfall-Flush.
+function updateWorkoutDraftNow(pid, did, week) {
+  if (!pid || !did || !week) return;
+  _workoutDraftLastCtx = { pid, did, week };
+
+  // Ein bereits als "gespeichert/abgeschlossen" markiertes Training bekommt
+  // KEINEN Entwurf (mehr) -- verhindert, dass ein längst abgeschlossenes
+  // Training nach Neustart fälschlich wieder als offener Entwurf auftaucht.
+  if (S.g(K.saved(pid, did, week))) {
+    const existing = getWorkoutDraft();
+    if (existing && existing.planId === pid && existing.dayId === did && existing.week === week) {
+      clearWorkoutDraft();
+    }
+    return;
+  }
+
+  const state = buildWorkoutDraftSnapshot(pid, did, week);
+  if (!state) return; // Plan/Tag existiert nicht (mehr) -- nichts zu sichern
+
+  const now = new Date().toISOString();
+  const existing = getWorkoutDraft();
+  const sameSession = existing && existing.planId === pid && existing.dayId === did && existing.week === week;
+
+  const draft = {
+    schemaVersion: WORKOUT_DRAFT_SCHEMA_VERSION,
+    planId: pid,
+    dayId: did,
+    week: week,
+    date: sameSession && existing.date ? existing.date : new Date().toISOString().slice(0, 10),
+    startedAt: sameSession && existing.startedAt ? existing.startedAt : now,
+    lastUpdatedAt: now,
+    state
+  };
+  S.sj(WORKOUT_DRAFT_KEY, draft);
+}
+
+// Erzwingt ein sofortiges Schreiben des zuletzt bekannten Kontexts, ohne auf
+// den Debounce-Timer zu warten -- für beforeunload/visibilitychange, wo eine
+// Verzögerung von 800ms bedeuten könnte, dass die letzte Eingabe verloren geht.
+function flushWorkoutDraftNow() {
+  clearTimeout(_workoutDraftDebounceTimer);
+  if (_workoutDraftLastCtx) {
+    updateWorkoutDraftNow(_workoutDraftLastCtx.pid, _workoutDraftLastCtx.did, _workoutDraftLastCtx.week);
+  }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) flushWorkoutDraftNow();
+});
+window.addEventListener('beforeunload', () => {
+  flushWorkoutDraftNow();
+});
+
+// ── Lesen / Validieren / Löschen ─────────────────────────────────────────
+// S.gj fängt JSON.parse-Fehler bereits intern ab (liefert dann null) -- das
+// allein reicht aber nicht: ein STRUKTURELL ungültiges (aber syntaktisch
+// gültiges JSON-)Objekt würde sonst unbemerkt durchrutschen und später beim
+// Zugriff auf z.B. draft.state.exercises crashen. Deshalb zusätzliche
+// Form-Validierung hier.
+function getWorkoutDraft() {
+  return S.gj(WORKOUT_DRAFT_KEY);
+}
+
+function isWorkoutDraftValid(draft) {
+  if (!draft || typeof draft !== 'object') return false;
+  if (typeof draft.planId !== 'string' || !draft.planId) return false;
+  if (typeof draft.dayId !== 'string' || !draft.dayId) return false;
+  if (typeof draft.week !== 'number' || !(draft.week >= 1)) return false;
+  if (typeof draft.lastUpdatedAt !== 'string' || isNaN(Date.parse(draft.lastUpdatedAt))) return false;
+  if (!draft.state || typeof draft.state !== 'object') return false;
+  if (!Array.isArray(draft.state.exercises)) return false;
+  return true;
+}
+
+function clearWorkoutDraft() {
+  S.d(WORKOUT_DRAFT_KEY);
+}
+
+// ── Startup-Check + Wiederherstellungs-Dialog ────────────────────────────
+// Wird einmalig beim App-Start aufgerufen (siehe app.js, INIT-Block, NACH
+// dem Lizenz-Gate). Zeigt NIEMALS automatisch etwas an -- stellt nur fest,
+// ob ein Dialog gezeigt werden soll, und zeigt ihn ggf. an.
+function checkForUnfinishedWorkoutDraft() {
+  const raw = S.g(WORKOUT_DRAFT_KEY); // roher String, unabhängig von JSON-Parsing
+  if (!raw) return; // wirklich kein Entwurf vorhanden -- nichts zu tun
+
+  const draft = getWorkoutDraft();
+
+  // Fall 1: raw-String vorhanden, aber JSON.parse ODER Form-Validierung schlägt fehl
+  // -> beschädigter Entwurf. Sicher abfangen, verständliche Meldung, kein Absturz.
+  if (!isWorkoutDraftValid(draft)) {
+    clearWorkoutDraft();
+    toast('⚠️ Ein beschädigter Trainings-Entwurf wurde gefunden und entfernt.');
+    return;
+  }
+
+  // Fall 2: Trotz vorhandenem Entwurf ist dieses Training bereits als
+  // gespeichert markiert (z.B. durch einen Ablauf, bei dem das Löschen des
+  // Entwurfs nach dem Speichern aus irgendeinem Grund nicht griff) -- keinen
+  // Dialog für etwas zeigen, das bereits abgeschlossen ist.
+  if (S.g(K.saved(draft.planId, draft.dayId, draft.week))) {
+    clearWorkoutDraft();
+    return;
+  }
+
+  // Fall 3: Plan oder Tag existiert nicht mehr (z.B. Plan zwischenzeitlich
+  // gelöscht) -- nichts Sinnvolles zum Wiederherstellen vorhanden.
+  const plans = getPlans();
+  const plan = plans.find(p => p.id === draft.planId);
+  if (!plan) {
+    clearWorkoutDraft();
+    return;
+  }
+  const dayInfo = resolveDayInfo(draft.planId, draft.dayId, draft.state.dayName, null);
+  if (dayInfo.deleted) {
+    clearWorkoutDraft();
+    return;
+  }
+
+  // Fall 4: Alles gültig -- Dialog anzeigen, NICHT automatisch wiederherstellen.
+  showWorkoutDraftRecoveryDialog(draft, plan, dayInfo);
+}
+
+function _formatDraftTimestamp(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('de-DE') + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+  } catch (e) {
+    return iso || '–';
+  }
+}
+
+function showWorkoutDraftRecoveryDialog(draft, plan, dayInfo) {
+  const body = document.getElementById('draft-recovery-body');
+  const mov = document.getElementById('draftRecoveryMov');
+  if (!body || !mov) return; // HTML-Shell nicht vorhanden -- sicher abbrechen statt Crash
+
+  body.innerHTML = `
+    <div style="background:var(--surface2);border-radius:12px;padding:14px;margin-bottom:16px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">PLAN</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">${plan.name || 'Plan'}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:3px">TRAININGSTAG</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:10px">${dayInfo.name}</div>
+      <div style="display:flex;gap:16px">
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px">DATUM</div>
+          <div style="font-size:13px;font-weight:600">${draft.date || '–'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:3px">ZULETZT GESPEICHERT</div>
+          <div style="font-size:13px;font-weight:600">${_formatDraftTimestamp(draft.lastUpdatedAt)}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px">
+        <div style="font-size:11px;color:var(--muted);margin-bottom:3px">BEREITS ERFASST</div>
+        <div style="font-size:13px;font-weight:600">${draft.state.setsCompletedCount || 0} Sätze</div>
+      </div>
+    </div>
+    <button id="draft-resume-btn" class="savebtn" style="width:100%;margin-bottom:10px">Training fortsetzen</button>
+    <button id="draft-discard-btn" style="width:100%;padding:13px;border-radius:var(--radius);border:1px solid var(--border2);background:var(--surface2);color:var(--muted);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:700;cursor:pointer">Entwurf verwerfen</button>
+  `;
+
+  document.getElementById('draft-resume-btn').addEventListener('click', () => {
+    resumeWorkoutDraft(draft);
+  });
+  document.getElementById('draft-discard-btn').addEventListener('click', () => {
+    discardWorkoutDraft();
+  });
+
+  mov.style.display = '';
+  mov.classList.add('on');
+}
+
+function resumeWorkoutDraft(draft) {
+  setActivePlan(draft.planId);
+  currentWeek = Math.min(Math.max(1, draft.week), SANITY_MAX_WEEK);
+  S.s('currentWeek', currentWeek);
+  setCurrentDay(draft.dayId);
+  currentDayId = draft.dayId;
+  document.getElementById('draftRecoveryMov').classList.remove('on');
+  showPage('log');
+  renderLog();
+  toast('▶️ Training fortgesetzt');
+}
+
+function discardWorkoutDraft() {
+  clearWorkoutDraft();
+  document.getElementById('draftRecoveryMov').classList.remove('on');
+  toast('🗑️ Entwurf verworfen');
+}
 // ══ KCAL WIDGET ═══════════════════════════════════════════
 function buildKcalWidget(plan,day,pf){
   const pid=plan.id,did=day.id,week=currentWeek;
@@ -6692,6 +7017,7 @@ function selectSwap(idx){
   S.s(K.swap(_swapPid,_swapDid,_swapEi),ex.de);
   for(let _w=1;_w<=currentWeek;_w++){for(let _si=0;_si<20;_si++){S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kg'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdh'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgL'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'kgR'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhL'));S.d(K.set(_swapPid,_swapDid,_w,_swapEi,_si,'wdhR'));}}
   document.getElementById('swapMov').classList.remove('on');
+  updateWorkoutDraftNow(_swapPid,_swapDid,currentWeek);
   renderLog();toast('✅ '+ex.de);
 }
 
@@ -6740,6 +7066,7 @@ function renderAddExList(){
         }
       }
       document.getElementById('addExMov').classList.remove('on');
+      updateWorkoutDraftNow(_aePid,_aeDid,_aeWeek);
       renderLog();toast('✅ '+exToAdd.de+' hinzugefügt');
     });
     list.appendChild(div);
@@ -7284,20 +7611,127 @@ function renderVolChart(){
 }
 
 
+// ══ DATENFORMAT: ZENTRALE VALIDIERUNG & MIGRATION ═══════════
+// Vereinheitlicht die Metadaten aller GainLog-Exportformate (Vollbackup,
+// Trainingsplan, Trainingstag) auf ein gemeinsames Grundformat, OHNE die
+// Fähigkeit zu verlieren, ältere Exportdateien weiterhin zu importieren.
+//
+// Neues Grundformat (schemaVersion 2):
+//   { app:"GainLog", type:"plan"|"day"|"full-backup", schemaVersion:2,
+//     exportedAt:<ISO>, appBuild:<string>, data:{...typ-spezifisch...} }
+//
+// WICHTIG: Dies ist die EINE zentrale Stelle für Format-Erkennung und
+// -Validierung. Die drei Export/Import-Module (day-export-import.js,
+// plan-export-import.js, plans.js/exportFullBackup+importFullBackup) rufen
+// ausschließlich parseGainLogImport()/wrapExport() auf -- keine eigene,
+// abweichende Prüflogik mehr pro Datei.
+
+const GAINLOG_APP_BUILD = '2.0';
+const GAINLOG_SCHEMA_VERSION = 2;
+
+// Baut das neue, einheitliche Export-Objekt. `type` ist einer von
+// 'plan' | 'day' | 'full-backup'. `data` ist die typ-spezifische Nutzlast.
+function wrapExport(type, data) {
+  return {
+    app: 'GainLog',
+    type: type,
+    schemaVersion: GAINLOG_SCHEMA_VERSION,
+    exportedAt: new Date().toISOString(),
+    appBuild: GAINLOG_APP_BUILD,
+    data: data
+  };
+}
+
+// Kontrollierte, sichere Tiefenkopie eines Übungsobjekts für den Export.
+// Bewusst KEINE manuelle Feldliste (die würde neue/künftige Übungsfelder
+// stillschweigend verwerfen) -- stattdessen: alles mitnehmen, nur bekannte
+// Laufzeit-only-Felder ausdrücklich entfernen.
+// Bekannte Laufzeit-only-Felder auf Übungsobjekten:
+//   _sid -- temporäre Session-ID, nur während einer aktiven Plan-Builder-
+//           Bearbeitung gesetzt (siehe plans-builder.js), wird dort am Ende
+//           der Session bereits selbst gelöscht. Rein defensiv hier nochmal
+//           entfernt, falls ein Export mitten in einer Bearbeitungssession
+//           ausgelöst würde.
+const EXERCISE_RUNTIME_ONLY_FIELDS = ['_sid'];
+function sanitizeExerciseForExport(ex) {
+  const copy = JSON.parse(JSON.stringify(ex));
+  EXERCISE_RUNTIME_ONLY_FIELDS.forEach(f => { delete copy[f]; });
+  return copy;
+}
+
+// Erkennt und normalisiert JEDES unterstützte GainLog-Dateiformat (neu UND
+// alt) auf ein einheitliches Ergebnis:
+//   { valid:true,  type, schemaVersion, exportedAt, data }
+//   { valid:false, error:<verständliche deutsche Fehlermeldung> }
+//
+// `expectedType`: wenn gesetzt ('plan'|'day'|'full-backup'), wird geprüft,
+// dass die Datei tatsächlich diesen Typ hat -- verhindert z.B., dass eine
+// Plan-Datei versehentlich als Tagesdatei importiert wird.
+function parseGainLogImport(raw, expectedType) {
+  let obj;
+  try {
+    obj = JSON.parse(raw);
+  } catch (e) {
+    return { valid: false, error: 'Die Datei ist kein gültiges JSON und kann nicht gelesen werden.' };
+  }
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return { valid: false, error: 'Ungültiges Dateiformat.' };
+  }
+
+  function typeMismatch(foundType) {
+    const LABELS = { plan: 'Trainingsplan', day: 'Trainingstag', 'full-backup': 'Vollbackup' };
+    return {
+      valid: false,
+      error: `Falscher Dateityp: erwartet "${LABELS[expectedType] || expectedType}", ` +
+        `aber diese Datei enthält "${LABELS[foundType] || foundType}".`
+    };
+  }
+
+  // ── Neues, einheitliches Format (schemaVersion >= 2) ───────────────────
+  if (obj.app === 'GainLog' && typeof obj.schemaVersion === 'number' && obj.type && obj.data && typeof obj.data === 'object') {
+    if (expectedType && obj.type !== expectedType) return typeMismatch(obj.type);
+    return { valid: true, type: obj.type, schemaVersion: obj.schemaVersion, exportedAt: obj.exportedAt || null, data: obj.data };
+  }
+
+  // ── Altes Vollbackup-Format (version:1, type:'gainlog_full_backup') ────
+  if (obj.type === 'gainlog_full_backup' && obj.data && typeof obj.data === 'object') {
+    if (expectedType && expectedType !== 'full-backup') return typeMismatch('full-backup');
+    return { valid: true, type: 'full-backup', schemaVersion: 1, exportedAt: obj.exportedAt || null, data: obj.data };
+  }
+
+  // ── Altes Tagesexport-Format (version:1, exercises:[...], kein "plan") ─
+  if (Array.isArray(obj.exercises) && !obj.plan) {
+    if (expectedType && expectedType !== 'day') return typeMismatch('day');
+    return {
+      valid: true, type: 'day', schemaVersion: 1, exportedAt: null,
+      data: { dayName: obj.dayName, dayIcon: obj.dayIcon, exercises: obj.exercises }
+    };
+  }
+
+  // ── Altes Planexport-Format (version:1, plan:{...}, data:{...}) ────────
+  if (obj.plan && typeof obj.plan === 'object' && obj.data && typeof obj.data === 'object') {
+    if (expectedType && expectedType !== 'plan') return typeMismatch('plan');
+    return {
+      valid: true, type: 'plan', schemaVersion: 1, exportedAt: obj.exportedAt || null,
+      data: { name: obj.name, plan: obj.plan, storageData: obj.data }
+    };
+  }
+
+  return { valid: false, error: 'Unbekanntes oder beschädigtes GainLog-Dateiformat.' };
+}
 // ══ DAY EXPORT / IMPORT ═══════════════════════════════════
 function exportDay(day){
-  const exportObj={
-    version:1,
+  // Kontrollierte Tiefenkopie statt manueller Feldliste (siehe data-format.js,
+  // sanitizeExerciseForExport) -- BUGFIX: die vorherige Version listete
+  // Übungsfelder einzeln auf (name,cat,typ,sets,type,warmup,targetRepMin,
+  // targetRepMax,trainingType,trainingTypeLabel) und hätte jedes künftig neu
+  // hinzugefügte Übungsfeld beim Export stillschweigend verworfen.
+  const data={
     dayName:day.name||'Tag',
     dayIcon:day.icon||'💪',
-    exercises:(day.exercises||[]).map(ex=>({
-      name:ex.name,cat:ex.cat,typ:ex.typ,
-      sets:ex.sets||3,type:ex.type||'rir-mv',
-      warmup:ex.warmup||false,
-      targetRepMin:ex.targetRepMin,targetRepMax:ex.targetRepMax,
-      trainingType:ex.trainingType,trainingTypeLabel:ex.trainingTypeLabel
-    }))
+    exercises:(day.exercises||[]).map(sanitizeExerciseForExport)
   };
+  const exportObj=wrapExport('day',data);
   const json=JSON.stringify(exportObj,null,2);
   const blob=new Blob([json],{type:'application/json'});
   const url=URL.createObjectURL(blob);
@@ -7316,28 +7750,31 @@ function importDayFile(day,onDone){
     const file=inp.files[0];if(!file)return;
     const reader=new FileReader();
     reader.onload=e=>{
-      try{
-        const obj=JSON.parse(e.target.result);
-        if(!obj.exercises){toast('❌ Ungültige .gainlogday Datei');return;}
-        if(!confirm('Übungen für "'+day.name+'" mit "'+obj.dayName+'" ersetzen? Bestehende Reihenfolge wird überschrieben.'))return;
-        const _impDefRR=getDefaultRRForDay(day)||{min:8,max:12};
-        day.exercises=obj.exercises.map(ex=>{
-          const merged={...ex};
-          if(!(merged.targetRepMin&&merged.targetRepMax)){
-            merged.targetRepMin=merged.targetRepMin||_impDefRR.min;
-            merged.targetRepMax=merged.targetRepMax||_impDefRR.max;
-          }
-          return merged;
-        });
-        onDone();
-        toast('✅ '+obj.dayName+' geladen!');
-      }catch(err){toast('❌ Fehler beim Import');}
+      // Zentrale Validierung statt eigener Ad-hoc-Prüfung -- erkennt sowohl
+      // das neue (schemaVersion 2) als auch das alte (version:1) Format,
+      // UND erkennt einen falschen Dateityp (z.B. versehentlich eine
+      // .gainlog Plan-Datei hier importiert) mit verständlicher Meldung.
+      const result=parseGainLogImport(e.target.result,'day');
+      if(!result.valid){toast('❌ '+result.error);return;}
+      const obj=result.data;
+      if(!Array.isArray(obj.exercises)){toast('❌ Ungültige .gainlogday Datei (keine Übungen enthalten)');return;}
+      if(!confirm('Übungen für "'+day.name+'" mit "'+(obj.dayName||'Import')+'" ersetzen? Bestehende Reihenfolge wird überschrieben.'))return;
+      const _impDefRR=getDefaultRRForDay(day)||{min:8,max:12};
+      day.exercises=obj.exercises.map(ex=>{
+        const merged={...ex};
+        if(!(merged.targetRepMin&&merged.targetRepMax)){
+          merged.targetRepMin=merged.targetRepMin||_impDefRR.min;
+          merged.targetRepMax=merged.targetRepMax||_impDefRR.max;
+        }
+        return merged;
+      });
+      onDone();
+      toast('✅ '+(obj.dayName||'Tag')+' geladen!');
     };
     reader.readAsText(file);
   });
   inp.click();
 }
-
 // ══ PLAN BUILDER ══════════════════════════════════════════
 let _editPlan=null;
 const DAY_ICONS=['💪','📈','🔥','🦵','⚡','🎯','💙','🧠'];
@@ -8016,13 +8453,7 @@ function exportPlan(pid){
     if(relevant)data[k]=localStorage.getItem(fullKey);
   }
 
-  const exportObj={
-    version:1,
-    exportedAt:new Date().toISOString().slice(0,10),
-    name:plan.name,
-    plan:plan,
-    data:data
-  };
+  const exportObj=wrapExport('plan',{name:plan.name,plan:plan,storageData:data});
 
   const json=JSON.stringify(exportObj,null,2);
   const blob=new Blob([json],{type:'application/json'});
@@ -8038,9 +8469,14 @@ function exportPlan(pid){
 function importPlan(file){
   const reader=new FileReader();
   reader.onload=e=>{
+    // Zentrale Validierung statt eigener Ad-hoc-Prüfung -- erkennt neues
+    // (schemaVersion 2) UND altes (version:1) Format, sowie falschen
+    // Dateityp (z.B. versehentlich eine .gainlogday Tages-Datei hier).
+    const result=parseGainLogImport(e.target.result,'plan');
+    if(!result.valid){toast('❌ '+result.error);return;}
+    const obj=result.data; // {name, plan, storageData}
+    if(!obj.plan||!obj.storageData){toast('❌ Ungültige .gainlog Datei (Plan-Struktur fehlt)');return;}
     try{
-      const obj=JSON.parse(e.target.result);
-      if(!obj.plan||!obj.data){toast('❌ Ungültige .gainlog Datei');return;}
       createAutoBackup('Vor Plan-Import: '+(obj.name||obj.plan.name||'?'));
 
       // Remap IDs to avoid conflicts
@@ -8062,7 +8498,7 @@ function importPlan(file){
       savePlans(plans);
 
       // Remap and restore all data keys
-      Object.entries(obj.data).forEach(([k,v])=>{
+      Object.entries(obj.storageData).forEach(([k,v])=>{
         let newKey=k.replace(oldPid,newPid);
         Object.entries(didMap).forEach(([oldDid,newDid])=>{
           newKey=newKey.split(oldDid).join(newDid);
@@ -9218,13 +9654,16 @@ if(checkLicenseOnStart()){
   checkOnboarding();
   renderLog();
   updateDash();
+  // Prüft auf ein nicht abgeschlossenes Training und zeigt ggf. den
+  // Wiederherstellungs-Dialog. Läuft NACH renderLog()/updateDash(), damit die
+  // App im Hintergrund bereits vollständig sichtbar ist, wenn der Dialog
+  // erscheint (kein leerer/halb geladener Bildschirm dahinter).
+  checkForUnfinishedWorkoutDraft();
 }
 
 // Wire permanent day import input
 const _glDayInp=document.getElementById('gl-day-import-input');
 if(_glDayInp)_glDayInp.addEventListener('change',()=>{if(typeof _dayImportCb==='function'&&_glDayInp.files[0]){_dayImportCb(_glDayInp.files[0]);_dayImportCb=null;}});
 </script>
-<div id="nxcard" style="display:none!important" aria-hidden="true"></div>
-<div id="dname" style="display:none!important" aria-hidden="true"></div>
 </body>
 </html>
