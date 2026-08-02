@@ -1430,6 +1430,14 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
       <div class="sileft"><div class="siico">⏱️</div><div><div class="silbl">5-Sekunden-Test</div><div class="sisub">Testet die echte Timer-/Ton-Planung</div></div></div>
       <div style="font-size:18px;color:var(--muted)">›</div>
     </div>
+    <div class="si" style="cursor:pointer" id="p-audio-repair">
+      <div class="sileft"><div class="siico">🛠️</div><div><div class="silbl">Audio reparieren und testen</div><div class="sisub">Nutzt dieselbe Reparaturlogik wie der Trainingsstart</div></div></div>
+      <div style="font-size:18px;color:var(--muted)">›</div>
+    </div>
+    <div class="si" style="cursor:pointer" id="p-audio-diag-copy">
+      <div class="sileft"><div class="siico">📋</div><div><div class="silbl">Audio-Diagnose kopieren</div><div class="sisub">Technisches Protokoll für Fehlersuche, keine Trainingsdaten</div></div></div>
+      <div style="font-size:18px;color:var(--muted)">›</div>
+    </div>
     <div class="si" style="cursor:pointer;display:none" id="p-wakelock-row">
       <div class="sileft"><div class="siico">📱</div><div><div class="silbl">Bildschirm während des Trainings aktiv halten</div><div class="sisub">Verhindert automatisches Sperren</div></div></div>
       <div class="toggle" id="wakelock-toggle"></div>
@@ -1601,6 +1609,7 @@ button[style*="background:#2563eb"],button[style*="background:var(--blue)"],
     <div class="trnum" id="trnum">3:00</div>
   </div>
   <div class="trlbl" id="trlbl">Pause</div>
+  <div id="audio-traffic-light" style="text-align:center;font-size:12px;font-weight:600;margin-top:4px;min-height:16px"></div>
   <div class="trbtns">
     <button class="trbtn trskip" id="tr-skip">ÜBERSPRINGEN</button>
     <button class="trbtn trstop" id="tr-stop">STOPPEN</button>
@@ -4000,77 +4009,279 @@ function setCurrentDay(id){
 }
 function loadCurrentDay(){try{return localStorage.getItem('gl_current_day');}catch(e){return null;}}
 // ══ AUDIO ════════════════════════════════════════════════
-// Neue Architektur (ersetzt die vorherige _audioCtx/_audioUnlocked-Kombination
-// samt setInterval-getriebenem Sound und Keep-Alive-Ping):
+// Architektur (Stand: iOS-"interrupted"-Robustheits-Upgrade):
 //
-//   1. AudioManager verwaltet GENAU EINEN AudioContext, mit klar aus dem
-//      TATSÄCHLICHEN ctx.state ABGELEITETEM Zustand (nie eine separate,
-//      potenziell veraltete "unlocked"-Flagge) -- Zustände: unavailable,
-//      locked, suspended, running, closed. Ein 'closed'-Context wird
-//      automatisch erkannt und die Referenz zurückgesetzt (nie wiederverwendet).
-//   2. Der Satzpausen-Ton wird beim Start der Pause SOFORT über die
-//      Web-Audio-Zeitachse für den exakten Endzeitpunkt eingeplant
-//      (scheduleBellAt) -- nicht mehr erst beim Ablauf eines setInterval-Timers
-//      erzeugt. Das setInterval dient nur noch der sichtbaren Countdown-
-//      Anzeige und als Fallback-Erkennung.
-//   3. Jede Pause bekommt eine eindeutige _restTimerGeneration-ID. Start,
-//      Neustart, +10s/-10s, Überspringen, Stoppen, nächste Pause und
-//      Trainingsende invalidieren die alte Generation und entfernen einen
-//      noch nicht ausgelösten geplanten Ton -- verhindert doppelte/verspätete
-//      Geistertöne zuverlässig.
+//   1. AudioManager verwaltet GENAU EINEN AudioContext. Zustand wird IMMER
+//      frisch aus ctx.state abgeleitet -- 'unavailable' | 'locked' |
+//      'suspended' | 'interrupted' | 'running' | 'closed'. WICHTIG:
+//      'interrupted' ist ein iOS-spezifischer Zustand (nach Anruf, Siri,
+//      Kontrollzentrum, AirPods-Wechsel, anderer App mit Audio) und wird
+//      JETZT an JEDER Stelle EXPLIZIT wie 'suspended' behandelt (Resume-
+//      Versuch nötig), NIRGENDS mehr implizit wie 'running' durchgereicht.
+//      Das war die konkrete Ursache des gemeldeten Fehlers: die vorherige
+//      Version prüfte an jeder Stelle nur "=== 'suspended'" -- ein
+//      'interrupted'-Context fiel überall durch den else-Zweig und wurde
+//      unbegrenzt weiterverwendet, obwohl er nie wieder Ton produzierte.
+//   2. context.onstatechange wird auf jedem erzeugten Context registriert.
+//      Wechselt der Context WÄHREND einer laufenden Pause von 'running' weg,
+//      wird der geplante Ton sofort als "scheduleUncertain" markiert.
+//   3. AudioManager.repair({playTestImpulse}) ist die zentrale Reparatur-
+//      funktion: Resume-Versuch, bei Fehlschlag EINMALIGE Context-Neu-
+//      erzeugung (begrenzt, keine Endlosschleife), optional Validierung
+//      per leisem, aber echtem Testimpuls. Wird von Trainingsstart, allen
+//      relevanten Nutzerinteraktionen, der Audio-Ampel und dem Soundtest
+//      gemeinsam genutzt (eine Quelle der Wahrheit, keine verstreute Logik).
+//   4. "scheduled" (Web-Audio-Nodes wurden angelegt) wird NICHT mehr mit
+//      "wurde tatsächlich hörbar abgespielt" gleichgesetzt. Pro Pause wird
+//      zusätzlich contextStateAtSchedule/contextStateAtFire/scheduleUncertain/
+//      fallbackAttempted/alarmCompleted mitgeführt.
+//   5. HTMLAudio-Fallback (eingebettetes, kurzes Base64-WAV, keine externe
+//      Datei) greift NUR, wenn Web Audio beim tatsächlichen Timer-Ende nicht
+//      vertrauenswürdig lief -- niemals als alleinige/primäre Lösung, nie
+//      zusätzlich zu einem bereits erfolgreichen Web-Audio-Ton (kein
+//      Doppelton).
+//   6. Kein Keep-Alive-Ping, kein Dauer-Audiostream -- wie zuvor.
+
+// ── Diagnoseprotokoll (Anforderung 9): begrenzter Ringpuffer, KEINE
+// Trainings-/Nutzerdaten, nur technische Audio-/Timer-Ereignisse. ──────────
+const AUDIO_DIAG_MAX = 100;
+let _audioDiagBuffer = [];
+function audioDiagLog(event, extra) {
+  try {
+    const entry = {
+      ts: new Date().toISOString(),
+      event: event,
+      ctxState: (AudioManager && AudioManager.ctx) ? AudioManager.ctx.state : 'none',
+      gen: typeof _restTimerGeneration !== 'undefined' ? _restTimerGeneration : null,
+      tl: typeof _tl !== 'undefined' ? _tl : null,
+      scheduled: (typeof _scheduledBell !== 'undefined' && _scheduledBell) ? _scheduledBell.scheduled : null,
+      scheduleUncertain: (typeof _scheduledBell !== 'undefined' && _scheduledBell) ? !!_scheduledBell.scheduleUncertain : null,
+      fallbackAttempted: (typeof _scheduledBell !== 'undefined' && _scheduledBell) ? !!_scheduledBell.fallbackAttempted : null
+    };
+    // Nur bekannte, unkritische technische Zusatzfelder übernehmen -- extra wird
+    // ausschließlich intern von diesem Modul selbst befüllt, nie mit Nutzereingaben.
+    if (extra && typeof extra === 'object') {
+      if (extra.error != null) entry.error = String(extra.error).slice(0, 120);
+      if (extra.priorState != null) entry.priorState = extra.priorState;
+      if (extra.state != null) entry.state = extra.state;
+      if (extra.reason != null) entry.reason = extra.reason;
+      if (extra.seconds != null) entry.seconds = extra.seconds;
+    }
+    _audioDiagBuffer.push(entry);
+    if (_audioDiagBuffer.length > AUDIO_DIAG_MAX) _audioDiagBuffer.shift();
+  } catch (e) { /* Diagnose darf niemals selbst einen Fehler verursachen */ }
+}
+function getAudioDiagText() {
+  if (!_audioDiagBuffer.length) return '(Noch keine Audio-Ereignisse aufgezeichnet.)';
+  return _audioDiagBuffer.map(e => {
+    let line = e.ts + '  ' + e.event + '  ctx=' + e.ctxState + '  gen=' + e.gen;
+    if (e.tl != null) line += '  restSec=' + e.tl;
+    if (e.seconds != null) line += '  seconds=' + e.seconds;
+    if (e.scheduled != null) line += '  scheduled=' + e.scheduled;
+    if (e.scheduleUncertain) line += '  UNCERTAIN';
+    if (e.fallbackAttempted) line += '  fallbackAttempted';
+    if (e.priorState) line += '  priorState=' + e.priorState;
+    if (e.state) line += '  state=' + e.state;
+    if (e.reason) line += '  reason=' + e.reason;
+    if (e.error) line += '  error=' + e.error;
+    return line;
+  }).join('\n');
+}
+
+// ── HTMLAudio-Fallback (Anforderung 5): eingebettetes, kurzes WAV als
+// Base64-Data-URI -- keine externe Audiodatei, ein einziges wiederverwendetes
+// HTMLAudioElement. ──────────────────────────────────────────────────────
+const FALLBACK_BEEP_DATA_URI = 'data:audio/wav;base64,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';
+let _fallbackAudioEl = null;
+let _fallbackAudioUnlocked = false;
+function _getFallbackAudioEl() {
+  if (!_fallbackAudioEl) {
+    _fallbackAudioEl = document.createElement('audio');
+    _fallbackAudioEl.preload = 'auto';
+    _fallbackAudioEl.playsInline = true;
+    _fallbackAudioEl.src = FALLBACK_BEEP_DATA_URI;
+  }
+  return _fallbackAudioEl;
+}
+// Muss innerhalb einer Nutzerinteraktion aufgerufen werden -- HTMLAudio hat auf iOS
+// eine EIGENE, von Web Audio UNABHÄNGIGE Freischaltung.
+function unlockFallbackAudio() {
+  if (_fallbackAudioUnlocked) return;
+  const el = _getFallbackAudioEl();
+  try {
+    const p = el.play();
+    if (p && p.then) {
+      p.then(() => { el.pause(); el.currentTime = 0; _fallbackAudioUnlocked = true; }).catch(() => {});
+    } else { el.pause(); el.currentTime = 0; _fallbackAudioUnlocked = true; }
+  } catch (e) { /* HTMLAudio-Freischaltung fehlgeschlagen -- Fallback bleibt ggf. stumm, kein Absturz */ }
+}
+function playFallbackBeep() {
+  const el = _getFallbackAudioEl();
+  try {
+    el.currentTime = 0;
+    const p = el.play();
+    if (p && p.catch) p.catch(e => audioDiagLog('alarm-failed', { error: 'fallback-play: ' + (e && e.message) }));
+    audioDiagLog('htmlaudio-fallback');
+    return true;
+  } catch (e) { audioDiagLog('alarm-failed', { error: 'fallback-play: ' + (e && e.message) }); return false; }
+}
+
+// ── AudioManager ──────────────────────────────────────────────────────────
 const AudioManager = {
   ctx: null,
+  _recreateAttempts: 0,
+  MAX_RECREATE_ATTEMPTS: 1, // pro repair()-Aufruf max. 1 Context-Neuerzeugung -- keine Endlosschleife
 
-  // Interner, unaufdringlicher Fehler-Log (KEINE Konsolen-Überflutung durch
-  // console.error/warn -- console.debug ist in normalen Konsolen-Filtereinstellungen
-  // meist ausgeblendet, aber bei Bedarf einsehbar).
   _log(msg, err) {
     if (err) console.debug('[Audio] ' + msg, err); else console.debug('[Audio] ' + msg);
   },
 
-  // Leitet den Zustand IMMER frisch aus ctx.state ab -- es gibt keine separate
-  // "unlocked"-Variable, die veralten könnte.
+  // Zustand IMMER frisch aus ctx.state ableiten -- 'interrupted' wird 1:1
+  // durchgereicht (NICHT auf 'suspended' oder 'running' abgebildet), damit
+  // jede aufrufende Stelle es explizit unterscheiden kann/muss.
   getState() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return 'unavailable';
     if (!this.ctx) return 'locked';
     if (this.ctx.state === 'closed') { this.ctx = null; return 'locked'; }
-    return this.ctx.state; // 'suspended' | 'running'
+    return this.ctx.state; // 'running' | 'suspended' | 'interrupted'
   },
 
-  // MUSS aus einem direkten Klick-/Touch-Handler heraus aufgerufen werden
-  // (Anforderung 3). Erzeugt den Context bei Bedarf und ruft resume() SYNCHRON
-  // innerhalb der Nutzerinteraktion auf -- das ist der von iOS akzeptierte Weg,
-  // Audio freizuschalten. Gibt den (ggf. neu erzeugten) Context zurück.
+  // Registriert den statechange-Listener (Anforderung 2). Bei Wechsel WÄHREND
+  // einer laufenden Pause weg von 'running' wird der geplante Ton als unsicher markiert.
+  _attachStateChangeListener(ctx) {
+    const handler = () => {
+      audioDiagLog('context-state-' + ctx.state);
+      updateAudioStatusUI();
+      updateAudioTrafficLight();
+      if ((ctx.state === 'suspended' || ctx.state === 'interrupted') &&
+          typeof _scheduledBell !== 'undefined' && _scheduledBell &&
+          _scheduledBell.generationId === _restTimerGeneration && !_scheduledBell.alarmCompleted) {
+        _scheduledBell.scheduleUncertain = true;
+        audioDiagLog('schedule-invalidated', { reason: ctx.state });
+      }
+      if (ctx.state === 'closed' && AudioManager.ctx === ctx) {
+        AudioManager.ctx = null;
+      }
+    };
+    try {
+      if ('onstatechange' in ctx) ctx.onstatechange = handler;
+      if (ctx.addEventListener) ctx.addEventListener('statechange', handler);
+    } catch (e) { /* manche Testumgebungen/ältere Browser -- kein Absturz */ }
+  },
+
+  _createContext() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    try {
+      const ctx = new AC();
+      this._attachStateChangeListener(ctx);
+      audioDiagLog('context-created');
+      return ctx;
+    } catch (e) { this._log('Context-Erzeugung fehlgeschlagen', e); return null; }
+  },
+
+  // Schneller, best-effort Unlock OHNE Testimpuls -- für häufige, leichtgewichtige
+  // Aufrufe (z.B. jede Satzpause), die NICHT bei jeder Eingabe hörbar sein dürfen.
+  // 'interrupted' wird jetzt EXPLIZIT wie 'suspended' behandelt (Resume-Versuch).
   unlockFromUserGesture() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
     try {
       if (this.ctx && this.ctx.state === 'closed') this.ctx = null;
-      if (!this.ctx) this.ctx = new AC();
-      if (this.ctx.state === 'suspended') {
-        this.ctx.resume().catch(e => this._log('resume (Nutzerinteraktion) fehlgeschlagen', e));
+      if (!this.ctx) this.ctx = this._createContext();
+      if (!this.ctx) return null;
+      if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+        audioDiagLog('resume-requested', { priorState: this.ctx.state });
+        this.ctx.resume().then(() => audioDiagLog('resume-resolved', { state: this.ctx.state }))
+          .catch(e => { audioDiagLog('resume-rejected', { error: e && e.message }); this._log('resume (Nutzerinteraktion) fehlgeschlagen', e); });
       }
       return this.ctx;
-    } catch (e) {
-      this._log('Context-Erzeugung fehlgeschlagen', e);
-      return null;
+    } catch (e) { this._log('Context-Erzeugung fehlgeschlagen', e); return null; }
+  },
+
+  // Best-effort Resume OHNE Nutzerinteraktion (visibilitychange/pageshow/focus).
+  // Erzeugt bewusst KEINEN neuen Context ohne Geste. 'interrupted' wird jetzt
+  // ebenfalls explizit behandelt (vorher NUR 'suspended' -- die konkrete Bug-Ursache).
+  tryResume() {
+    if (this.ctx && this.ctx.state === 'closed') { this.ctx = null; return; }
+    if (this.ctx && (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted')) {
+      audioDiagLog('resume-requested', { priorState: this.ctx.state });
+      this.ctx.resume().then(() => audioDiagLog('resume-resolved', { state: this.ctx.state }))
+        .catch(e => { audioDiagLog('resume-rejected', { error: e && e.message }); this._log('tryResume fehlgeschlagen', e); });
     }
   },
 
-  // Best-effort Resume OHNE Nutzerinteraktion (z.B. bei visibilitychange-Rückkehr).
-  // Erzeugt bewusst KEINEN neuen Context, wenn noch keiner existiert -- das wäre
-  // ohne Nutzergeste ohnehin meist wirkungslos und nur zusätzliche Fehlerquelle.
-  tryResume() {
-    if (this.ctx && this.ctx.state === 'closed') { this.ctx = null; return; }
-    if (this.ctx && this.ctx.state === 'suspended') {
-      this.ctx.resume().catch(e => this._log('tryResume fehlgeschlagen', e));
+  // Zentrale, vollständige Reparatur (Anforderung 3/7): Resume-Versuch, bei
+  // anhaltendem Fehlschlag EINMALIGE Context-Neuerzeugung, optional Validierung
+  // per leisem, aber echtem Testimpuls. WICHTIG: Context-Erzeugung und der
+  // ERSTE resume()-Aufruf passieren synchron (vor jedem await) direkt im
+  // aufrufenden Nutzer-Gesture-Handler -- das ist der von iOS akzeptierte Weg.
+  // Der Recreate-Zweig (falls nötig) läuft zwangsläufig einen Tick später, aber
+  // noch innerhalb derselben ununterbrochenen Promise-Kette derselben Interaktion.
+  async repair(opts) {
+    opts = opts || {};
+    const playTestImpulse = !!opts.playTestImpulse;
+    this._recreateAttempts = 0;
+
+    let ctx = this.ctx;
+    if (!ctx) ctx = this._createContext();
+    if (!ctx) { updateAudioStatusUI(); updateAudioTrafficLight('red'); return { ok: false, ctx: null }; }
+    this.ctx = ctx;
+
+    const needsResume = ctx.state === 'suspended' || ctx.state === 'interrupted';
+    const resumePromise = needsResume ? ctx.resume() : Promise.resolve();
+    if (needsResume) audioDiagLog('resume-requested', { priorState: ctx.state });
+    try { await resumePromise; if (needsResume) audioDiagLog('resume-resolved', { state: ctx.state }); }
+    catch (e) { audioDiagLog('resume-rejected', { error: e && e.message }); }
+
+    let healthy = ctx.state === 'running';
+
+    if (!healthy && this._recreateAttempts < this.MAX_RECREATE_ATTEMPTS) {
+      this._recreateAttempts++;
+      try { if (ctx.close) await ctx.close(); } catch (e) { /* ignorierbar */ }
+      audioDiagLog('context-recreated');
+      const newCtx = this._createContext();
+      if (newCtx) {
+        this.ctx = newCtx; ctx = newCtx;
+        if (newCtx.state === 'suspended' || newCtx.state === 'interrupted') {
+          try { await newCtx.resume(); audioDiagLog('resume-resolved', { state: newCtx.state }); }
+          catch (e) { audioDiagLog('resume-rejected', { error: e && e.message }); }
+        }
+        healthy = newCtx.state === 'running';
+      }
     }
+
+    if (healthy && playTestImpulse) {
+      try { _buildValidationImpulse(ctx); audioDiagLog('webaudio-fire', { validation: true }); }
+      catch (e) { healthy = false; audioDiagLog('alarm-failed', { error: e && e.message }); }
+    }
+
+    // Der alte Context (falls neu erzeugt wurde) wird ab hier NIE wieder verwendet --
+    // this.ctx zeigt bereits auf den neuen; keine Referenz auf den alten bleibt bestehen.
+    updateAudioStatusUI();
+    updateAudioTrafficLight(healthy ? 'green' : (ctx && ctx.state === 'interrupted' ? 'yellow' : 'red'));
+    return { ok: healthy, ctx: healthy ? ctx : null };
   }
 };
 
-// Aktualisiert den kleinen Status-Hinweis in den Einstellungen ("Satzpausen-Ton
-// aktiv" / "Ton aktivieren") -- rein informativ, tippbar für erneute Freischaltung.
+// Sehr kurzer, LEISER (nicht der hörbare Alarmton), aber technisch echter Testimpuls zur
+// Validierung -- unterscheidet sich bewusst vom lauten Soundtest/Satzpausen-Ton.
+function _buildValidationImpulse(ctx) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sine'; osc.frequency.value = 440;
+  const t0 = ctx.currentTime;
+  gain.gain.setValueAtTime(0.0001, t0);
+  gain.gain.linearRampToValueAtTime(0.03, t0 + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+  osc.start(t0); osc.stop(t0 + 0.06);
+  return osc;
+}
+
+// Aktualisiert den Status-Hinweis in den Einstellungen ("Satzpausen-Ton aktiv" /
+// "Ton aktivieren" / "unterbrochen") -- tippbar für erneute Freischaltung.
 function updateAudioStatusUI() {
   const el = document.getElementById('audio-status-row');
   if (!el) return;
@@ -4081,6 +4292,10 @@ function updateAudioStatusUI() {
     if (lbl) lbl.textContent = '🔔 Satzpausen-Ton aktiv';
     if (sub) sub.textContent = 'Bereit';
     el.style.opacity = '1';
+  } else if (state === 'interrupted') {
+    if (lbl) lbl.textContent = '🔔 Satzpausen-Ton unterbrochen';
+    if (sub) sub.textContent = 'Antippen zum Reparieren';
+    el.style.opacity = '1';
   } else if (state === 'unavailable') {
     if (lbl) lbl.textContent = '🔕 Satzpausen-Ton nicht verfügbar';
     if (sub) sub.textContent = 'Dieser Browser unterstützt keine Web Audio API';
@@ -4090,6 +4305,110 @@ function updateAudioStatusUI() {
     if (sub) sub.textContent = 'Antippen zum Freischalten';
     el.style.opacity = '1';
   }
+}
+
+// Sichtbare, unaufdringliche Audio-Ampel WÄHREND einer aktiven Satzpause
+// (Anforderung 4). forceColor optional ('green'|'yellow'|'red') -- sonst wird der
+// Zustand frisch aus AudioManager.getState() abgeleitet.
+function updateAudioTrafficLight(forceColor) {
+  const el = document.getElementById('audio-traffic-light');
+  if (!el) return;
+  let color = forceColor, label;
+  if (!color) {
+    const state = AudioManager.getState();
+    if (state === 'running') color = 'green';
+    else if (state === 'interrupted' || state === 'suspended') color = 'yellow';
+    else color = 'red';
+  }
+  if (color === 'green') { label = '🟢 Pausenton bereit'; el.style.color = '#22c55e'; }
+  else if (color === 'yellow') { label = '🟡 Pausenton unterbrochen – tippen'; el.style.color = '#f59e0b'; }
+  else { label = '🔴 Pausenton nicht verfügbar – tippen'; el.style.color = '#ef4444'; }
+  el.textContent = label;
+  el.style.cursor = 'pointer';
+}
+// Antippen der Ampel: Context reparieren, kurzen Testton abspielen, laufenden
+// Alarm für die verbleibende Zeit neu planen (Anforderung 4).
+function _wireAudioTrafficLightClick() {
+  const el = document.getElementById('audio-traffic-light');
+  if (!el || el._wired) return;
+  el._wired = true;
+  el.addEventListener('click', async () => {
+    const result = await AudioManager.repair({ playTestImpulse: true });
+    unlockFallbackAudio();
+    if (result.ok && typeof _timerEndTs !== 'undefined' && _timerEndTs) {
+      const remaining = Math.max(1, Math.round((_timerEndTs - Date.now()) / 1000));
+      scheduleBellAt(result.ctx, remaining, _restTimerGeneration);
+      toast('✅ Ton repariert, Alarm neu geplant');
+    } else if (result.ok) {
+      toast('✅ Ton repariert');
+    } else {
+      toast('⚠️ Ton weiterhin blockiert');
+    }
+  });
+}
+
+// ── Web-Audio-Zeitachsen-Scheduling für den Satzpausen-Alarm ─────────────────
+let _restTimerGeneration = 0;
+// _scheduledBell erweitert um: scheduleUncertain, contextStateAtSchedule,
+// contextStateAtFire, fallbackAttempted, alarmCompleted (Anforderung 6).
+// "scheduled" bedeutet NUR "Nodes wurden angelegt", NICHT "wurde hörbar abgespielt".
+let _scheduledBell = null;
+
+function cancelScheduledBell() {
+  if (_scheduledBell) {
+    _scheduledBell.nodes.forEach(n => {
+      try { n.stop(); } catch (e) { /* bereits gestoppt/abgelaufen -- unkritisch */ }
+      try { n.disconnect(); } catch (e) { /* ignorierbar */ }
+    });
+  }
+  _scheduledBell = null;
+}
+
+function scheduleBellAt(ctx, seconds, generationId) {
+  cancelScheduledBell();
+  const contextStateAtSchedule = ctx ? ctx.state : 'none';
+  const base = { generationId, nodes: [], scheduled: false, scheduleUncertain: false,
+    contextStateAtSchedule, contextStateAtFire: null, fallbackAttempted: false, alarmCompleted: false };
+
+  if (!ctx) {
+    _scheduledBell = { ...base, scheduleUncertain: true };
+    audioDiagLog('schedule-invalidated', { reason: 'no-context' });
+    return;
+  }
+  // Ein Context, der beim Planen NICHT 'running' ist (suspended/interrupted), wird
+  // trotzdem versucht zu bestücken (er könnte sich bis zum Ablauf erholen), aber die
+  // Pause gilt von Anfang an als "unsicher" -- _timerFire() nutzt dann den Fallback,
+  // falls der Context bis dahin nicht doch noch 'running' wurde.
+  const uncertainFromStart = contextStateAtSchedule !== 'running';
+  try {
+    const fireAt = ctx.currentTime + seconds;
+    const nodes = _buildBellNodes(ctx, fireAt, true);
+    _scheduledBell = { ...base, nodes, scheduled: nodes.length > 0, scheduleUncertain: uncertainFromStart };
+    if (uncertainFromStart) audioDiagLog('schedule-invalidated', { reason: contextStateAtSchedule });
+    else audioDiagLog('timer-scheduled', { seconds });
+    if (contextStateAtSchedule === 'suspended' || contextStateAtSchedule === 'interrupted') {
+      ctx.resume().catch(e => AudioManager._log('scheduleBellAt resume fehlgeschlagen', e));
+    }
+  } catch (e) {
+    AudioManager._log('scheduleBellAt fehlgeschlagen', e);
+    _scheduledBell = { ...base, scheduleUncertain: true };
+    audioDiagLog('alarm-failed', { error: e && e.message });
+  }
+}
+
+function gentleFlash(){
+  // Sanfter weißer Schimmer + Vibration
+  if(navigator.vibrate){navigator.vibrate([80]);}
+  const flash=document.createElement('div');
+  flash.style.cssText='position:fixed;inset:0;background:#fff;opacity:0;z-index:99999;pointer-events:none;transition:opacity .3s ease';
+  document.body.appendChild(flash);
+  requestAnimationFrame(()=>{
+    flash.style.opacity='0.15';
+    setTimeout(()=>{
+      flash.style.opacity='0';
+      setTimeout(()=>flash.remove(),350);
+    },350);
+  });
 }
 
 // ── Ton-Erzeugung (reines Web-Audio-Nodes-Bauen, kein Scheduling-Zeitpunkt) ──
@@ -4115,18 +4434,12 @@ function _buildBellNodes(ctx, atTime, isPause) {
   return nodes;
 }
 
-// Spielt den Ton SOFORT auf dem übergebenen Context ab (für direkte
-// Nutzeraktionen wie "Ton testen" oder "Pause überspringen" -- kein Scheduling
-// in die Zukunft nötig).
-// BUGFIX (vorherige Version): der Retry-Pfad erzeugte einen neuen Context als
-// ac2, doPlay() verwendete wegen seines Closures aber weiterhin den
-// ursprünglichen, u.U. toten Context ac. playBellOnContext bekommt den zu
-// nutzenden Context jetzt als expliziten Parameter -- bei einem Retry mit
-// neu erzeugtem Context wird zwingend DIESER Context für die eigentliche
-// Wiedergabe verwendet, nicht mehr der alte.
+// Spielt den Ton SOFORT auf dem übergebenen Context ab (direkte Nutzeraktionen wie
+// "Ton testen" oder "Pause überspringen"). BUGFIX (frühere Session): der zu nutzende
+// Context wird als expliziter Parameter übergeben, nie implizit über Closure.
 function playBellOnContext(ctx, isPause) {
   if (!ctx) return false;
-  if (ctx.state === 'suspended') {
+  if (ctx.state === 'suspended' || ctx.state === 'interrupted') {
     ctx.resume().then(() => { _buildBellNodes(ctx, ctx.currentTime, isPause); }).catch(e => {
       AudioManager._log('playBellOnContext resume fehlgeschlagen', e);
     });
@@ -4136,84 +4449,35 @@ function playBellOnContext(ctx, isPause) {
   return true;
 }
 
-// Rückwärtskompatibler Wrapper für direkte, unmittelbare Wiedergabe (Skip-Ton,
-// alter Aufrufstil). Nutzt IMMER den aktuell gültigen Context aus dem Manager.
+// Rückwärtskompatibler Wrapper für direkte, unmittelbare Wiedergabe. Nutzt IMMER
+// den aktuell gültigen Context aus dem Manager.
 function playBell(isPause) {
   const ctx = AudioManager.unlockFromUserGesture() || AudioManager.ctx;
   if (!ctx) return;
   playBellOnContext(ctx, isPause);
 }
 
-// ── Web-Audio-Zeitachsen-Scheduling für den Satzpausen-Alarm ─────────────────
-let _restTimerGeneration = 0;
-let _scheduledBell = null; // { generationId, nodes:[...], scheduled:bool, timerFired:bool }
-
-function cancelScheduledBell() {
-  if (_scheduledBell) {
-    _scheduledBell.nodes.forEach(n => {
-      try { n.stop(); } catch (e) { /* bereits gestoppt/abgelaufen -- unkritisch */ }
-      try { n.disconnect(); } catch (e) { /* ignorierbar */ }
-    });
-  }
-  _scheduledBell = null;
-}
-
-// Plant den Alarmton für den Zeitpunkt (jetzt + seconds) auf der Web-Audio-
-// Zeitachse. generationId MUSS mit der zum Aufrufzeitpunkt aktuellen
-// _restTimerGeneration übereinstimmen (Aufrufer verantwortlich).
-function scheduleBellAt(ctx, seconds, generationId) {
-  cancelScheduledBell();
-  if (!ctx) { _scheduledBell = { generationId, nodes: [], scheduled: false, timerFired: false }; return; }
-  try {
-    const fireAt = ctx.currentTime + seconds;
-    const nodes = _buildBellNodes(ctx, fireAt, true);
-    _scheduledBell = { generationId, nodes, scheduled: nodes.length > 0, timerFired: false };
-    if (ctx.state === 'suspended') {
-      ctx.resume().catch(e => AudioManager._log('scheduleBellAt resume fehlgeschlagen', e));
-    }
-  } catch (e) {
-    AudioManager._log('scheduleBellAt fehlgeschlagen', e);
-    _scheduledBell = { generationId, nodes: [], scheduled: false, timerFired: false };
-  }
-}
-
-function gentleFlash(){
-  // Sanfter weißer Schimmer + Vibration
-  if(navigator.vibrate){navigator.vibrate([80]);}
-  const flash=document.createElement('div');
-  flash.style.cssText='position:fixed;inset:0;background:#fff;opacity:0;z-index:99999;pointer-events:none;transition:opacity .3s ease';
-  document.body.appendChild(flash);
-  requestAnimationFrame(()=>{
-    flash.style.opacity='0.15';
-    setTimeout(()=>{
-      flash.style.opacity='0';
-      setTimeout(()=>flash.remove(),350);
-    },350);
-  });
-}
-
-// Unlock-Versuch bei JEDER Nutzer-Interaktion -- bleibt als ZUSÄTZLICHE
-// Absicherung bestehen (Anforderung: "dürfen als zusätzliche Absicherung
-// bestehen bleiben, aber nicht die einzige Aktivierungslogik sein"). Die
-// PRIMÄRE Freischaltung passiert in startTimer()/dem Soundtest-Button, direkt
-// im jeweiligen Klick-Handler.
+// Unlock-Versuch bei JEDER Nutzer-Interaktion -- bleibt als ZUSÄTZLICHE Absicherung
+// bestehen, ist aber NICHT die einzige Aktivierungslogik (primär: startWorkoutTimer/
+// startTimer/Soundtest/Ampel-Tap rufen gezielt AudioManager.repair()/
+// unlockFromUserGesture() auf).
 document.addEventListener('touchstart', () => { AudioManager.unlockFromUserGesture(); updateAudioStatusUI(); }, { once: false, passive: true });
 document.addEventListener('click', () => { AudioManager.unlockFromUserGesture(); updateAudioStatusUI(); }, { once: false, passive: true });
 
-// ── Screen Wake Lock (Anforderung 8) ─────────────────────────────────────
+// ── Screen Wake Lock ──────────────────────────────────────────────────────
 let _wakeLock = null;
-let _wakeLockShouldBeActive = false; // Absicht, unabhängig vom tatsächlich vom OS gewährten Sentinel
+let _wakeLockShouldBeActive = false;
 
 async function requestWakeLock() {
-  if (!('wakeLock' in navigator)) return; // Feature Detection -- App funktioniert unverändert ohne
-  if (USER.wakeLockEnabled === false) return; // Nutzer hat die Einstellung deaktiviert
+  if (!('wakeLock' in navigator)) return;
+  if (USER.wakeLockEnabled === false) return;
   _wakeLockShouldBeActive = true;
-  if (_wakeLock) return; // bereits aktiv, keine doppelte Anfrage
+  if (_wakeLock) return;
   try {
     _wakeLock = await navigator.wakeLock.request('screen');
     _wakeLock.addEventListener('release', () => { _wakeLock = null; });
   } catch (e) {
-    AudioManager._log('Wake Lock Anfrage fehlgeschlagen', e); // z.B. Low Power Mode -- kein Nutzerfehler
+    AudioManager._log('Wake Lock Anfrage fehlgeschlagen', e);
   }
 }
 function releaseWakeLock() {
@@ -4221,58 +4485,67 @@ function releaseWakeLock() {
   if (_wakeLock) { try { _wakeLock.release(); } catch (e) { /* ignorierbar */ } _wakeLock = null; }
 }
 
-// iOS PWA: Audio-Status prüfen + Wake Lock erneut anfordern + abgelaufenen
-// Timer genau einmal nachträglich auslösen, wenn die App wieder sichtbar wird.
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    AudioManager.tryResume();
-    updateAudioStatusUI();
-    if (_wakeLockShouldBeActive) requestWakeLock(); // OS gibt Wake Lock beim Backgrounden i.d.R. frei
-    if (typeof _timerEndTs !== 'undefined' && _timerEndTs && Date.now() >= _timerEndTs) {
-      // Pause ist während des Hintergrundzustands abgelaufen -- genau einmal auslösen.
-      // _timerFire() selbst ist idempotent (siehe dort) und verhindert einen zweiten Ton,
-      // falls der geplante Web-Audio-Ton bereits (unhörbar im Hintergrund) gefeuert hat.
-      setTimeout(() => { _timerFire(); }, 100);
-    }
-  }
-});
-window.addEventListener('pageshow', () => {
+// iOS: Audio-Zustand prüfen + Wake Lock erneut anfordern + abgelaufenen Timer
+// genau einmal nachträglich auslösen, wenn die App wieder sichtbar/fokussiert wird.
+// 'interrupted' wird über AudioManager.tryResume() jetzt korrekt mitbehandelt.
+function _handleAudioRecoveryOpportunity(source) {
+  audioDiagLog('recovery-opportunity', { reason: source });
   AudioManager.tryResume();
   updateAudioStatusUI();
-});
+  updateAudioTrafficLight();
+  if (_wakeLockShouldBeActive) requestWakeLock();
+  if (typeof _timerEndTs !== 'undefined' && _timerEndTs && Date.now() >= _timerEndTs) {
+    setTimeout(() => { _timerFire(); }, 100);
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) _handleAudioRecoveryOpportunity('visibilitychange'); });
+window.addEventListener('pageshow', () => _handleAudioRecoveryOpportunity('pageshow'));
+window.addEventListener('focus', () => _handleAudioRecoveryOpportunity('focus'));
 
-let _ti=null,_tt=0,_tl=0; // Countdown-Anzeige-Timer (Satzpause) -- NICHT mehr primärer Audioauslöser
+let _ti=null,_tt=0,_tl=0; // Countdown-Anzeige-Timer (Satzpause) -- NICHT primärer Audioauslöser
 let _timerEndTs=null;
 
-// Idempotent: darf pro Pause maximal EINMAL tatsächlich auslösen (Anforderung 6/10).
-// Wird sowohl vom setInterval-Fallback als auch vom visibilitychange-Nachtrag aufgerufen --
-// beide Pfade können theoretisch für dieselbe Pause "gleichzeitig" laufen (z.B. App kommt
-// exakt beim Ablauf aus dem Hintergrund zurück), der Guard verhindert einen doppelten Ton.
+// Idempotent (Anforderung 6): "alarmCompleted" darf pro Generation nur einmal gesetzt
+// werden. "scheduled" allein gilt NICHT als Wiedergabeerfolg -- nur wenn der Context
+// beim Planen UND beim Ablauf durchgehend 'running' war (kein scheduleUncertain), gilt
+// Web Audio als vertrauenswürdig; sonst greift der HTMLAudio-Fallback.
 function _timerFire(){
   const gen=_restTimerGeneration;
-  if(_scheduledBell&&_scheduledBell.generationId===gen&&_scheduledBell.timerFired)return; // bereits ausgelöst
-  if(_scheduledBell&&_scheduledBell.generationId===gen)_scheduledBell.timerFired=true;
+  if(_scheduledBell&&_scheduledBell.generationId===gen&&_scheduledBell.alarmCompleted)return;
+  if(_scheduledBell&&_scheduledBell.generationId===gen)_scheduledBell.alarmCompleted=true;
 
   clearInterval(_ti);_ti=null;_timerEndTs=null;_tl=0;
 
-  // Der vorab geplante Web-Audio-Ton ist der primäre Auslöser. Nur wenn das
-  // Scheduling nicht möglich war (kein/gesperrter Context beim Start der Pause),
-  // spielt _timerFire() als Fallback selbst einen sofortigen Ersatzton.
-  const wasScheduled=_scheduledBell&&_scheduledBell.generationId===gen&&_scheduledBell.scheduled;
-  if(!wasScheduled){
-    const ctx=AudioManager.ctx||AudioManager.unlockFromUserGesture();
-    if(ctx)playBellOnContext(ctx,true);
+  const bell=(_scheduledBell&&_scheduledBell.generationId===gen)?_scheduledBell:null;
+  const contextStateAtFire=AudioManager.ctx?AudioManager.ctx.state:'none';
+  if(bell)bell.contextStateAtFire=contextStateAtFire;
+
+  const webAudioTrustworthy = bell && bell.scheduled && !bell.scheduleUncertain && contextStateAtFire==='running';
+
+  if(webAudioTrustworthy){
+    audioDiagLog('webaudio-fire',{});
+  } else if (contextStateAtFire==='running' && AudioManager.ctx){
+    // Web Audio war unsicher geplant, ABER der Context ist JETZT (z.B. durch
+    // zwischenzeitliche Reparatur) gesund -- direkter Versuch statt Fallback.
+    playBellOnContext(AudioManager.ctx,true);
+    audioDiagLog('webaudio-fire',{reason:'late-recovery'});
+  } else {
+    if(bell)bell.fallbackAttempted=true;
+    const ok=playFallbackBeep();
+    if(!ok)audioDiagLog('alarm-failed',{});
   }
 
   gentleFlash();
   const te=document.getElementById('tov');
   if(te){te.classList.remove('on');te.style.display='';}
   toast('✅ '+t('worksets')+'!');
+  updateAudioTrafficLight();
 }
 
 // Bricht eine ggf. laufende Pause samt geplantem Ton ab und startet eine neue.
-// generationId wird IMMER erhöht -- das invalidiert jeden noch ausstehenden
-// Alarm der vorherigen Pause zuverlässig (Anforderung 5).
+// generationId wird IMMER erhöht -- invalidiert jeden ausstehenden Alarm zuverlässig.
+// Leichte Reparatur OHNE Testimpuls (Anforderung 7: kein hörbarer Ton bei jeder
+// Eingabe) -- volle Validierung passiert bei startWorkoutTimer()/Soundtest/Ampel-Tap.
 function startTimer(secs,lbl){
   if(!secs||secs<=0)return;
   _restTimerGeneration++;
@@ -4280,24 +4553,15 @@ function startTimer(secs,lbl){
   cancelScheduledBell();
   clearInterval(_ti);_ti=null;
 
-  // Freischaltung DIREKT im Klick-/Touch-Handler-Kontext (startTimer wird über
-  // window.gl_startTimer aus Inline-onclick-Handlern heraus aufgerufen, siehe
-  // unten -- das zählt für iOS als echte Nutzerinteraktion).
-  const ctx=AudioManager.unlockFromUserGesture();
-  updateAudioStatusUI();
-  requestWakeLock();
-
   _tt=secs;_tl=secs;
   _timerEndTs=Date.now()+(secs*1000);
-
-  // Alarmton SOFORT für den Endzeitpunkt auf der Web-Audio-Zeitachse einplanen --
-  // nicht mehr erst beim Ablauf eines setInterval erzeugen.
-  scheduleBellAt(ctx,secs,myGen);
 
   const lblEl=document.getElementById('trlbl');
   if(lblEl)lblEl.textContent=lbl||'Pause';
   const tovEl=document.getElementById('tov');
   if(tovEl){tovEl.style.display='flex';tovEl.classList.add('on');}
+  _wireAudioTrafficLightClick();
+  updateAudioTrafficLight();
   updateTimerUI();
   _ti=setInterval(()=>{
     if(!_timerEndTs){clearInterval(_ti);return;}
@@ -4305,6 +4569,23 @@ function startTimer(secs,lbl){
     if(_tl<=0){_timerFire();}
     else updateTimerUI();
   },500);
+
+  // Freischaltung DIREKT im Klick-/Touch-Handler-Kontext (startTimer wird über
+  // window.gl_startTimer aus Inline-onclick-Handlern heraus aufgerufen -- zählt für
+  // iOS als echte Nutzerinteraktion). Synchroner Best-effort-Unlock + sofortiges
+  // Scheduling, PLUS eine vollständige Reparatur im Hintergrund (deckt 'interrupted'
+  // robuster ab als der schnelle Pfad allein) -- falls die Generation inzwischen
+  // durch einen neueren Timer-Start überholt wurde, greift das Ergebnis nicht mehr ein.
+  const quickCtx=AudioManager.unlockFromUserGesture();
+  updateAudioStatusUI();
+  scheduleBellAt(quickCtx,secs,myGen);
+  requestWakeLock();
+  AudioManager.repair({playTestImpulse:false}).then(({ctx})=>{
+    if(myGen!==_restTimerGeneration)return; // überholt durch neueren Timer-Start
+    if(ctx && (!_scheduledBell || _scheduledBell.scheduleUncertain)){
+      scheduleBellAt(ctx,_tl,myGen); // mit reparierten Context UND aktueller Restzeit neu planen
+    }
+  });
 }
 // Global helper for inline onclick – most reliable on iOS
 window.gl_startTimer=function(secs,lbl){startTimer(secs,lbl);}
@@ -4375,6 +4656,18 @@ function startWorkoutTimer(pid,did,week){
   _startWoTick(pid,did,week);
   requestWakeLock();
   toast('▶ Workout gestartet!');
+  // Echte Audio-Validierung beim Trainingsstart (Anforderung 3): Context herstellen,
+  // resumen, mit einem leisen aber echten Testimpuls prüfen -- NICHT nur ctx.state
+  // lesen. Das Training läuft unabhängig vom Ergebnis weiter, aber ein blockierter
+  // Zustand wird SOFORT sichtbar (Status-Zeile/Ampel), statt erst nach der ersten
+  // lautlosen Pause bemerkt zu werden.
+  AudioManager.repair({playTestImpulse:true}).then(({ok})=>{
+    unlockFallbackAudio();
+    if(!ok){
+      audioDiagLog('alarm-failed',{reason:'startWorkoutTimer-validation'});
+      toast('⚠️ Satzpausen-Ton ist blockiert – in den Einstellungen antippen');
+    }
+  });
 }
 
 function pauseWorkoutTimer(pid,did,week){
@@ -9652,27 +9945,33 @@ document.getElementById('theme-toggle')?.addEventListener('click',()=>{
   USER.theme=USER.theme==='dark'?'light':'dark';saveUser();applyTheme(USER.theme);
 });
 
-// ══ SATZPAUSEN-TON: Status, Soundtest, Wake Lock ═════════════
-// Status-Zeile antippen -> erneuter Freischaltungsversuch (Anforderung 3: der
-// Nutzer muss bei blockiertem Audio durch Tippen eine erneute Freischaltung
-// auslösen können).
-document.getElementById('audio-status-row')?.addEventListener('click',()=>{
-  AudioManager.unlockFromUserGesture();
-  updateAudioStatusUI();
-  const state=AudioManager.getState();
-  if(state==='running')toast('🔔 Satzpausen-Ton aktiv');
-  else if(state==='unavailable')toast('🔕 Dieser Browser unterstützt keine Web Audio API');
+// ══ SATZPAUSEN-TON: Status, Soundtest, Wake Lock, Diagnose ═══
+// Status-Zeile antippen -> volle Reparatur (Resume, bei Bedarf Context-Neuerzeugung).
+// Der Nutzer muss bei blockiertem Audio durch Tippen eine erneute Freischaltung
+// auslösen können (Anforderung 3), inkl. robuster 'interrupted'-Behandlung.
+document.getElementById('audio-status-row')?.addEventListener('click',async ()=>{
+  const {ok}=await AudioManager.repair({playTestImpulse:true});
+  unlockFallbackAudio();
+  if(ok)toast('🔔 Satzpausen-Ton aktiv');
+  else if(AudioManager.getState()==='unavailable')toast('🔕 Dieser Browser unterstützt keine Web Audio API');
   else toast('⚠️ Ton konnte nicht freigeschaltet werden -- bitte erneut versuchen');
 });
 
-// "Satzpausen-Ton testen" -- spielt den ECHTEN Alarmton (isPause=true) sofort ab,
-// über denselben playBell()-Pfad, der auch beim echten Timer-Ablauf genutzt wird.
-document.getElementById('p-soundtest')?.addEventListener('click',()=>{
-  const ctx=AudioManager.unlockFromUserGesture();
-  updateAudioStatusUI();
-  if(!ctx){toast('🔕 Ton nicht verfügbar');return;}
-  playBellOnContext(ctx,true);
-  toast('🔊 Ton abgespielt');
+// "Satzpausen-Ton testen" -- spielt den ECHTEN Alarmton ab und zeigt Diagnose-Details
+// (Anforderung 10: Context-Zustand, ob neu erzeugt, Resume-Erfolg, Web Audio/Fallback).
+document.getElementById('p-soundtest')?.addEventListener('click',async ()=>{
+  const stateBefore=AudioManager.getState();
+  const hadCtxBefore=!!AudioManager.ctx;
+  const {ok,ctx}=await AudioManager.repair({playTestImpulse:false});
+  const recreated=hadCtxBefore&&ctx&&ctx!==null&&stateBefore!=='running'&&ok;
+  if(ok&&ctx){
+    playBellOnContext(ctx,true);
+    toast(`🔊 Ton abgespielt (Zustand vorher: ${stateBefore}${recreated?', Context neu erzeugt':''})`);
+  } else {
+    unlockFallbackAudio();
+    const fbOk=playFallbackBeep();
+    toast(fbOk?'🔊 Web Audio nicht verfügbar -- Fallback-Ton abgespielt':'🔕 Kein Ton verfügbar');
+  }
 });
 
 // "5-Sekunden-Test" -- nutzt AUSDRÜCKLICH dieselbe startTimer()-Funktion wie eine
@@ -9680,6 +9979,32 @@ document.getElementById('p-soundtest')?.addEventListener('click',()=>{
 document.getElementById('p-soundtest-5s')?.addEventListener('click',()=>{
   window.gl_startTimer(5,'5-Sekunden-Test');
   toast('⏱️ 5-Sekunden-Test gestartet');
+});
+
+// "Audio reparieren und testen" -- nutzt DIESELBE Reparaturfunktion wie der
+// Trainingsstart (Anforderung 10: "muss dieselbe Repair-Funktion verwenden").
+document.getElementById('p-audio-repair')?.addEventListener('click',async ()=>{
+  toast('🛠️ Repariere...');
+  const {ok}=await AudioManager.repair({playTestImpulse:true});
+  unlockFallbackAudio();
+  toast(ok?'✅ Audio repariert und getestet':'⚠️ Audio weiterhin blockiert');
+});
+
+// "Audio-Diagnose kopieren" -- reines technisches Protokoll, keine Trainingsdaten.
+document.getElementById('p-audio-diag-copy')?.addEventListener('click',async ()=>{
+  const text=getAudioDiagText();
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      toast('📋 Audio-Diagnose kopiert');
+    } else {
+      const ta=document.createElement('textarea');
+      ta.value=text;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();
+      document.execCommand('copy');ta.remove();
+      toast('📋 Audio-Diagnose kopiert');
+    }
+  }catch(e){toast('⚠️ Kopieren fehlgeschlagen');}
 });
 
 // Wake-Lock-Einstellung: Zeile nur anzeigen, wenn die API überhaupt verfügbar ist
@@ -9832,8 +10157,18 @@ function adjustTimer(delta){
   _restTimerGeneration++;
   const myGen=_restTimerGeneration;
   cancelScheduledBell();
-  const ctx=AudioManager.unlockFromUserGesture(); // echter Klick/Touch -- legitime Nutzerinteraktion
-  scheduleBellAt(ctx,_tl,myGen);
+  // Sofortiger Quick-Unlock + Reschedule (kein Leerlauf während der async Reparatur),
+  // PLUS vollständige Reparatur im Hintergrund -- deckt 'interrupted' robust ab
+  // (Anforderung 7: bei nicht reparierbarem Zustand neuen Context erzeugen).
+  const quickCtx=AudioManager.unlockFromUserGesture();
+  scheduleBellAt(quickCtx,_tl,myGen);
+  AudioManager.repair({playTestImpulse:false}).then(({ctx})=>{
+    if(myGen!==_restTimerGeneration)return;
+    if(ctx&&(!_scheduledBell||_scheduledBell.scheduleUncertain)){
+      const remaining=_timerEndTs?Math.max(1,Math.round((_timerEndTs-Date.now())/1000)):_tl;
+      scheduleBellAt(ctx,remaining,myGen);
+    }
+  });
 }
 document.getElementById('tr-minus')?.addEventListener('click',()=>adjustTimer(-10));
 document.getElementById('tr-plus')?.addEventListener('click',()=>adjustTimer(10));
